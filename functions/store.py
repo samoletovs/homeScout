@@ -5,6 +5,7 @@ import logging
 import os
 import sqlite3
 from datetime import datetime, timezone
+from typing import Optional
 
 from models import Listing
 
@@ -16,6 +17,7 @@ CREATE TABLE IF NOT EXISTS listings (
   price REAL, area_m2 REAL, rooms INTEGER, first_seen TEXT, last_seen TEXT
 );
 CREATE TABLE IF NOT EXISTS price_history (key TEXT, price REAL, seen TEXT);
+CREATE TABLE IF NOT EXISTS geocache (q TEXT PRIMARY KEY, lat REAL, lon REAL);
 """
 
 
@@ -37,6 +39,16 @@ class Store:
 
     def is_empty(self) -> bool:
         return self.conn.execute("SELECT 1 FROM listings LIMIT 1").fetchone() is None
+
+    def get_geo(self, query: str) -> Optional[tuple[float, float]]:
+        row = self.conn.execute("SELECT lat, lon FROM geocache WHERE q=?", (query,)).fetchone()
+        return (row[0], row[1]) if row else None
+
+    def put_geo(self, query: str, lat: float, lon: float) -> None:
+        self.conn.execute(
+            "INSERT OR REPLACE INTO geocache(q, lat, lon) VALUES(?,?,?)", (query, lat, lon)
+        )
+        self.conn.commit()
 
     def filter_new(self, listings: list[Listing]) -> list[tuple[Listing, str]]:
         """Persist all listings; return (listing, reason) for new or price-dropped ones.

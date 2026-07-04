@@ -9,7 +9,8 @@ import logging
 
 import httpx
 
-from config import DB_PATH, USER_AGENT
+from config import DB_PATH, ENRICH_CAP, USER_AGENT
+from enrich import enrich_all
 from models import Listing
 from notify import TelegramNotifier
 from scoring import HardFilters, passes_hard_filters
@@ -40,16 +41,18 @@ async def run_once(*, db_path: str = DB_PATH, notify_results: bool = True) -> li
     store = Store(db_path)
     try:
         seeding = store.is_empty()
-        async with httpx.AsyncClient(timeout=20.0, headers={"User-Agent": USER_AGENT}) as client:
+        async with httpx.AsyncClient(timeout=25.0, headers={"User-Agent": USER_AGENT}) as client:
             listings = _dedupe(await fetch_all(client))
             listings = [lst for lst in listings if passes_hard_filters(lst, filters)]
             fresh = store.filter_new(listings)
             log.info("ingested=%d alertable=%d seeding=%s", len(listings), len(fresh), seeding)
             if seeding:
                 log.info("first run — seeded %d listings, no alerts sent", len(fresh))
-            elif notify_results and fresh:
-                sent = await TelegramNotifier().send_all(fresh, client)
-                log.info("telegram: sent %d/%d", sent, len(fresh))
+            elif fresh:
+                await enrich_all([lst for lst, _ in fresh], client, store, cap=ENRICH_CAP)
+                if notify_results:
+                    sent = await TelegramNotifier().send_all(fresh, client)
+                    log.info("telegram: sent %d/%d", sent, len(fresh))
         return fresh
     finally:
         store.close()

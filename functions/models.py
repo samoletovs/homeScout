@@ -27,6 +27,8 @@ class Listing:
     # --- enrichment (filled by the pipeline) ---
     commute_min: Optional[float] = None
     flood_risk: bool = False
+    nearest_school_km: Optional[float] = None
+    nearest_kindergarten_km: Optional[float] = None
     features: dict = field(default_factory=dict)
     first_seen: Optional[datetime] = None
 

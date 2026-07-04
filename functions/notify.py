@@ -34,6 +34,14 @@ def format_listing(listing: Listing, reason: str = "new") -> str:
         facts.append(f"floor {listing.floor}")
     if listing.energy_class:
         facts.append(f"energy {listing.energy_class}")
+    if listing.commute_min:
+        facts.append(f"~{listing.commute_min:g} min to centre")
+    if listing.nearest_school_km is not None:
+        facts.append(f"school {listing.nearest_school_km:g} km")
+    if listing.nearest_kindergarten_km is not None:
+        facts.append(f"kindergarten {listing.nearest_kindergarten_km:g} km")
+    if listing.flood_risk:
+        facts.append("⚠️ flood zone")
     if facts:
         lines.append("  ·  ".join(facts))
     lines.append(f"🔗 {listing.url}")

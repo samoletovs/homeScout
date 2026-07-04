@@ -42,13 +42,16 @@ does a real fetch and seeds the dedup store on first run.
 ## Structure
 
 - `functions/` — Azure Functions (Python v2), timer-triggered pipeline
-  - `sources.py` — portal adapters (ss.lv, city24, izsoles, VZD NĪTIS)
-  - `pipeline.py` — ingest → enrich → value → extract → score → notify
-  - `scoring.py` — hard filters + weighted-sum (the deterministic "brain")
+  - `sources.py` — portal adapters (ss.lv, city24; izsoles/NĪTIS stubs)
+  - `parsers.py` — pure payload → `Listing` parsers
+  - `enrich.py` / `geo.py` — geocode, nearest school/kindergarten, commute
+  - `pipeline.py` — ingest → dedupe → store → enrich → notify
+  - `scoring.py` — hard filters + weighted-sum (used from Phase 4)
+  - `store.py` — SQLite dedup + price history + geocode cache
   - `models.py` — `Listing` / `Deal` / `ScoredListing`
-- `infrastructure/` — Bicep (monitoring module + Functions + Cosmos)
-- `tests/` — scorer unit tests
-- `scripts/run_once.py` — local one-shot runner
+- `infrastructure/` — Bicep (monitoring + Functions + Cosmos)
+- `tests/` — 30 offline unit tests
+- `scripts/` — `run_once.py` (live run), `refresh_amenities.py` (dataset refresh)
 
 ## Privacy
 
@@ -59,7 +62,7 @@ offers and mortgage figures stay in the OneDrive `.me` vault
 
 ## Status
 
-**Phase 1 built** — ss.lv + city24 ingest, dedupe, and Telegram alerts, with 19 passing
-tests. Off the default SWA-React golden path (Python Functions + Cosmos, like
-agentMode/mindMe) — deviation documented in [AGENTS.md](AGENTS.md). Next: enrichment +
-valuation (Phases 2–3).
+**Phases 1–2 built** — ss.lv + city24 ingest, dedupe, and Telegram alerts, now enriched
+with commute time, nearest school/kindergarten, and €/m² (30 passing tests). Off the
+default SWA-React golden path (Python Functions + Cosmos, like agentMode/mindMe) —
+deviation documented in [AGENTS.md](AGENTS.md). Next: valuation vs VZD NĪTIS deals (Phase 3).
