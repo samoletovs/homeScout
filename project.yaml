@@ -1,0 +1,18 @@
+name: homeScout
+purpose: "Property-intelligence pipeline for Baltic home-buying — listings, sold-deal valuation, auctions, enrichment, scoring, ranked alerts"
+users: "Personal — a family buying a home in Mārupe / Rīga / Jūrmala"
+stage: scaffold
+goals:
+  - "Aggregate new listings across ss.lv, city24 and developer sites (deduped)"
+  - "Value listings against real registered deals (VZD NĪTIS) — over/under-priced flag"
+  - "Enrich with commute, school/kindergarten proximity, flood risk"
+  - "Deterministic weighted-sum scoring against family criteria"
+  - "Watch izsoles.ta.gov.lv auctions with a due-diligence checklist"
+  - "Ranked shortlist to Telegram; browsable dashboard"
+similar:
+  - "Letify (Funda+Pararius → Telegram)"
+  - "rightmove-lettings-triager (commute + OSM + LLM enrichment)"
+quality:
+  - tests
+  - api
+origin: "agentMode property_search skill; mindVault dig report 2026-07-04-ai-property-hunt-system-latvia"

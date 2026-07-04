@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.python_packages/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Azure Functions
+functions/local.settings.json
+bin/
+obj/
+
+# Secrets & personal data — NEVER commit
+.env
+.env.local
+*.private.*
+data/           # scraped listings / local cache
+*.sqlite
+*.db
+
+# Tooling
+.DS_Store
+*.log
+.playwright-mcp/
+playwright-report/
+test-results/

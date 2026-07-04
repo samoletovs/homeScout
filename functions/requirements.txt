@@ -1,0 +1,5 @@
+# Azure Functions runtime deps. The scorer/models core is stdlib-only.
+azure-functions
+httpx
+feedparser
+python-dateutil
