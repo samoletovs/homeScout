@@ -1,0 +1,46 @@
+"""Store dedup tests (in-memory sqlite, offline)."""
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "functions"))
+
+from models import Listing  # noqa: E402
+from store import Store  # noqa: E402
+
+
+def _mk(listing_id: str, price: float) -> Listing:
+    return Listing(id=listing_id, source="ss.lv", url=f"http://x/{listing_id}",
+                   price=price, area_m2=50, rooms=2, district="Rīga")
+
+
+class StoreTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.store = Store(":memory:")
+
+    def tearDown(self) -> None:
+        self.store.close()
+
+    def test_new_listing_then_seen(self):
+        first = self.store.filter_new([_mk("a", 100000)])
+        self.assertEqual([reason for _, reason in first], ["new"])
+        second = self.store.filter_new([_mk("a", 100000)])
+        self.assertEqual(second, [])  # already seen, unchanged
+
+    def test_price_drop_is_detected(self):
+        self.store.filter_new([_mk("a", 100000)])
+        dropped = self.store.filter_new([_mk("a", 90000)])
+        self.assertEqual([reason for _, reason in dropped], ["price_drop"])
+
+    def test_price_increase_is_not_alerted(self):
+        self.store.filter_new([_mk("a", 100000)])
+        self.assertEqual(self.store.filter_new([_mk("a", 110000)]), [])
+
+    def test_is_empty_reflects_state(self):
+        self.assertTrue(self.store.is_empty())
+        self.store.filter_new([_mk("a", 100000)])
+        self.assertFalse(self.store.is_empty())
+
+
+if __name__ == "__main__":
+    unittest.main()

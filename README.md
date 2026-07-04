@@ -27,17 +27,17 @@ valued, ranked feed — a **decision aid, not just an alert bot**.
 
 See [AGENTS.md](AGENTS.md) for the full build plan, data sources, and conventions.
 
-## Quick start (local, dry run)
+## Quick start (local)
 
 ```bash
 cd functions
 pip install -r requirements.txt
-python -m unittest discover ../tests    # scorer tests must pass
-python ../scripts/run_once.py           # dry-run the pipeline on sample data
+python -m unittest discover ../tests    # 19 offline tests must pass
+python ../scripts/run_once.py           # live fetch (ss.lv + city24) → prints alertable listings
 ```
 
-The scorer core (`scoring.py`, `models.py`) is **stdlib-only**, so the tests and the
-dry run work before any Azure/LLM setup.
+The parser/scorer/store core is **stdlib-only** (tests need no network); `run_once`
+does a real fetch and seeds the dedup store on first run.
 
 ## Structure
 
@@ -59,6 +59,7 @@ offers and mortgage figures stay in the OneDrive `.me` vault
 
 ## Status
 
-Scaffold. Remote repo + first deploy pending. This is **off** the default SWA-React
-golden path (Python Functions + Cosmos, like agentMode/mindMe) — deviation documented in
-[AGENTS.md](AGENTS.md).
+**Phase 1 built** — ss.lv + city24 ingest, dedupe, and Telegram alerts, with 19 passing
+tests. Off the default SWA-React golden path (Python Functions + Cosmos, like
+agentMode/mindMe) — deviation documented in [AGENTS.md](AGENTS.md). Next: enrichment +
+valuation (Phases 2–3).

@@ -8,10 +8,10 @@ from pipeline import run_once
 app = func.FunctionApp()
 
 
-# Every 30 minutes. Adjust the NCRONTAB expression as needed.
+# Every 30 minutes (ss.lv RSS ttl is ~5 min; 30 min is polite and sufficient).
 @app.timer_trigger(schedule="0 */30 * * * *", arg_name="timer", run_on_startup=False)
-def poll_listings(timer: func.TimerRequest) -> None:
+async def poll_listings(timer: func.TimerRequest) -> None:
     if timer.past_due:
         logging.warning("timer past due — running anyway")
-    scored = run_once(notify_results=True)
-    logging.info("pipeline produced %d scored listings", len(scored))
+    fresh = await run_once(notify_results=True)
+    logging.info("homeScout: %d new/changed listing(s) this run", len(fresh))

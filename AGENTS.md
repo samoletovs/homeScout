@@ -14,9 +14,8 @@ with an optional SWA dashboard. Grew out of agentMode's `property_search` skill.
 ```bash
 cd functions
 pip install -r requirements.txt
-python -m unittest discover ../tests    # MUST pass (scorer is stdlib-only)
-python -c "import scoring, models, pipeline, sources"   # imports must succeed
-python ../scripts/run_once.py           # dry-run pipeline on sample data
+python -m unittest discover ../tests    # MUST pass (parser/scorer/store are stdlib-only)
+python ../scripts/run_once.py           # LIVE fetch: ss.lv + city24 → prints alertable listings
 ```
 
 ## Project structure
@@ -24,15 +23,19 @@ python ../scripts/run_once.py           # dry-run pipeline on sample data
 ```
 functions/
 ├── function_app.py   # Azure Functions entry (timer trigger → pipeline.run_once)
-├── pipeline.py       # ingest → dedupe → enrich → value → extract → score → notify
-├── sources.py        # portal adapters (ss.lv RSS, city24 JSON, izsoles, VZD NĪTIS)
-├── scoring.py        # hard filters + deterministic weighted-sum (the "brain")
+├── pipeline.py       # ingest → dedupe → store(seen) → notify  (Phase 1)
+├── sources.py        # async fetchers: ss.lv RSS + city24 (curl_cffi); izsoles/NĪTIS stubs
+├── parsers.py        # pure payload → Listing parsers (unit-tested)
+├── store.py          # SQLite dedup / seen-state + price history
+├── notify.py         # Telegram sender + message formatting
+├── config.py         # feeds, target areas, env
+├── scoring.py        # hard filters + deterministic weighted-sum (used from Phase 4)
 ├── models.py         # Listing / Deal / ScoredListing (dataclasses, stdlib)
 ├── host.json
 └── requirements.txt
 infrastructure/main.bicep   # monitoring module + (TODO) Functions + Cosmos
-tests/test_scoring.py       # scorer unit tests
-scripts/run_once.py         # local one-shot runner
+tests/                      # test_parsers, test_store, test_notify, test_scoring (19 tests)
+scripts/run_once.py         # local one-shot runner (live fetch)
 ```
 
 ## Data sources (verified endpoints)
@@ -54,6 +57,9 @@ scripts/run_once.py         # local one-shot runner
   unreliable at direct numeric ranking. Keep it that way.
 - **Prefer structured feeds over HTML scraping** (RSS, the city24 JSON API). HTML scrape
   is the fallback. Alert on zero-results/parse-failure — don't fail silently.
+- **city24 is Cloudflare-fronted** — its JSON API TLS-fingerprints clients, so fetch it
+  with `curl_cffi` (`impersonate="chrome"`), not plain httpx (which gets 403). ss.lv RSS
+  is fine over httpx.
 - **Ingest from a residential IP** where portals block datacenter IPs; keep request rates
   low and respectful (personal, non-republishing use only).
 - Secrets: `functions/local.settings.json` locally, SWA App Settings / Function App
@@ -77,12 +83,22 @@ Functions patterns.
 
 ## Build plan (phases)
 
-1. MVP — ss.lv RSS + city24 JSON → dedupe/store → Telegram alerts.
+1. ✅ **MVP (built)** — ss.lv RSS + city24 JSON → dedupe/store → Telegram alerts.
 2. Enrichment — commute, schools, flood, €/m².
 3. Valuation — €/m² vs NĪTIS comparables → over/under-priced.
 4. Scoring — hard filters + weighted-sum → ranked shortlist.
 5. Auction watch — izsoles scrape + due-diligence checklist.
 6. Dashboard + price history (SWA).
+
+## Known limitations (Phase 1)
+
+- **State durability:** the SQLite store persists on a home machine (the recommended
+  residential-IP host) but is ephemeral on the Functions consumption plan — move dedup
+  state to Cosmos DB for durable cloud runs (Phase 6 / infra).
+- **city24 requires `curl_cffi`** (browser TLS impersonation); it degrades gracefully to
+  ss.lv-only if that dep is missing or city24 rate-limits.
+- Telegram send is a no-op (logs alerts) until `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`
+  are set.
 
 ## Hypothesis
 

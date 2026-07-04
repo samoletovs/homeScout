@@ -1,74 +1,84 @@
-"""Listing/deal source adapters.
+"""Source adapters — fetch raw payloads and delegate to pure parsers.
 
-Each adapter targets a real Latvian source. Endpoints are documented here from the
-mindVault research; the fetch logic is a stub to implement per phase (see AGENTS.md).
-Prefer structured feeds (RSS, JSON) over HTML scraping.
+Phase 1 (active): ss.lv RSS + city24 JSON. Later-phase sources are stubbed below.
+Prefer structured feeds over HTML scraping.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Protocol
+from typing import TYPE_CHECKING
 
+from config import CITY24_TARGET_AREAS, CITY24_URL, SSLV_FEEDS
 from models import Deal, Listing
+from parsers import parse_city24, parse_sslv
+
+if TYPE_CHECKING:
+    import httpx
 
 log = logging.getLogger("homescout.sources")
 
 
-class ListingSource(Protocol):
-    name: str
+async def fetch_sslv(client: "httpx.AsyncClient") -> list[Listing]:
+    listings: list[Listing] = []
+    for url, area in SSLV_FEEDS:
+        try:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            items = parse_sslv(resp.text, area)
+            if items:
+                log.info("ss.lv %s: %d sale listings", area, len(items))
+            else:
+                log.warning("ss.lv %s: 0 sale listings (feed layout changed?)", area)
+            listings.extend(items)
+        except Exception:
+            log.exception("ss.lv fetch failed: %s", url)
+    return listings
 
-    def fetch_new(self) -> list[Listing]:
-        ...
 
-
-class SsLvRss:
-    """ss.lv — RSS per district: {SSLV_RSS_BASE}/{city}/rss/ (ttl=5). Volume leader."""
-
-    name = "ss.lv"
-
-    def fetch_new(self) -> list[Listing]:
-        log.info("TODO: parse ss.lv RSS (feedparser) -> Listing[]")
+async def fetch_city24() -> list[Listing]:
+    """Fetch city24 via curl_cffi (browser-TLS impersonation) — its API is Cloudflare-fronted."""
+    try:
+        from curl_cffi.requests import AsyncSession
+    except ImportError:
+        log.warning("curl_cffi not installed — city24 skipped (Cloudflare TLS check)")
+        return []
+    try:
+        async with AsyncSession() as session:
+            resp = await session.get(CITY24_URL, impersonate="chrome", timeout=25)
+        if resp.status_code != 200:
+            log.warning("city24 returned HTTP %s", resp.status_code)
+            return []
+        data = resp.json()
+        items = parse_city24(data, CITY24_TARGET_AREAS)
+        log.info("city24: %d listings in target areas (of %d)", len(items), len(data))
+        return items
+    except Exception:
+        log.exception("city24 fetch failed")
         return []
 
 
-class City24Api:
-    """city24.lv — JSON: {CITY24_API_BASE}/search/realties?tsType=sale&unitType=Apartment.
-
-    Richest source: already includes lat/long and energy class.
-    """
-
-    name = "city24"
-
-    def fetch_new(self) -> list[Listing]:
-        log.info("TODO: call city24 JSON API -> Listing[]")
-        return []
+async def fetch_all(client: "httpx.AsyncClient") -> list[Listing]:
+    ss, c24 = await asyncio.gather(fetch_sslv(client), fetch_city24())
+    return [*ss, *c24]
 
 
+# ── Later-phase stubs (kept for the roadmap) ─────────────────────────────
 class IzsolesAuctions:
-    """izsoles.ta.gov.lv — no API; scrape filtered HTML. Set Listing.is_auction=True.
-
-    Apply the due-diligence checklist before alerting (title / debts / occupancy / cash).
-    """
+    """izsoles.ta.gov.lv — no API; scrape filtered HTML (Phase 5). Sets is_auction=True."""
 
     name = "izsoles"
 
     def fetch_new(self) -> list[Listing]:
-        log.info("TODO: scrape izsoles real-estate auctions -> Listing[](is_auction=True)")
+        log.info("TODO(Phase 5): scrape izsoles auctions")
         return []
 
 
 class VzdNitisDeals:
-    """VZD NĪTIS registered sold deals — data.gov.lv CKAN dataset {VZD_NITIS_DATASET}.
-
-    The valuation layer: comparables for €/m² over/under-priced checks.
-    """
+    """VZD NĪTIS sold deals — data.gov.lv CKAN (Phase 3 valuation layer)."""
 
     name = "vzd-nitis"
 
     def fetch_deals(self) -> list[Deal]:
-        log.info("TODO: download NĪTIS CSV/XLSX from data.gov.lv -> Deal[]")
+        log.info("TODO(Phase 3): download NĪTIS deals")
         return []
-
-
-def default_listing_sources() -> list[ListingSource]:
-    return [SsLvRss(), City24Api(), IzsolesAuctions()]
