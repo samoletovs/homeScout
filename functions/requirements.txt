@@ -2,3 +2,4 @@
 azure-functions
 httpx
 curl_cffi
+openai

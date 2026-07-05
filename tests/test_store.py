@@ -41,6 +41,17 @@ class StoreTests(unittest.TestCase):
         self.store.filter_new([_mk("a", 100000)])
         self.assertFalse(self.store.is_empty())
 
+    def test_save_evaluation_and_area_stats(self):
+        listing = _mk("a", 200000)  # area_m2 50 → 4000 €/m²
+        listing.score = 0.7
+        listing.valuation = "under (-5% vs Rīga median)"
+        self.store.filter_new([listing])
+        self.store.save_evaluation(listing, "Rīga")
+        stats = self.store.area_stats("Rīga")
+        self.assertEqual(stats["count"], 1)
+        self.assertAlmostEqual(stats["avg_ppm2"], 4000.0)
+        self.assertEqual(self.store.area_stats("Mārupe")["count"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

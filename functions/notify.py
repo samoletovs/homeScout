@@ -79,13 +79,16 @@ def format_digest(items: list[tuple[Listing, str]], limit: int = 10) -> str:
             mark = "🟢" if listing.valuation.startswith("under") else "🔴" if listing.valuation.startswith("over") else "⚪"
             val = f"  {mark}{listing.valuation.split(' (')[0]}"
         drop = " 📉" if reason == "price_drop" else ""
-        blocks.append(
+        block = (
             f"\n{star}{emoji} {listing.district or '?'} · {price}"
             + (f" · {ppm2:,.0f}€/m²" if ppm2 else "")
             + val + drop
             + (f"\n{'  ·  '.join(facts)}" if facts else "")
-            + f"\n{listing.url}"
         )
+        if listing.adviser:
+            block += f"\n💬 {listing.adviser}"
+        block += f"\n{listing.url}"
+        blocks.append(block)
     if len(items) > limit:
         blocks.append(f"\n…and {len(items) - limit} more")
     return "\n".join(blocks)
