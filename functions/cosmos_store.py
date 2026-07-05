@@ -70,7 +70,9 @@ class CosmosStore:
 
     # ── seen-state ──────────────────────────────────────────────────────
     def is_empty(self) -> bool:
-        rows = list(self._listings.query_items(query="SELECT VALUE COUNT(1) FROM c"))
+        rows = list(self._listings.query_items(
+            query="SELECT VALUE COUNT(1) FROM c", enable_cross_partition_query=True,
+        ))
         return (rows[0] if rows else 0) == 0
 
     def filter_new(self, listings: list[Listing]) -> list[tuple[Listing, str]]:
@@ -143,6 +145,7 @@ class CosmosStore:
         rows = list(self._listings.query_items(
             query="SELECT VALUE c.ppm2 FROM c WHERE c.bucket=@b AND IS_DEFINED(c.ppm2) AND c.ppm2 != null",
             parameters=[{"name": "@b", "value": bucket}],
+            enable_cross_partition_query=True,
         ))
         vals = [r for r in rows if r is not None]
         return {"count": len(vals), "avg_ppm2": round(sum(vals) / len(vals), 1) if vals else None}
@@ -151,14 +154,18 @@ class CosmosStore:
     def key_for(self, ref: str) -> Optional[str]:
         from azure.cosmos import exceptions
 
-        try:
-            self._listings.read_item(item=ref, partition_key=ref)
-            return ref
-        except exceptions.CosmosResourceNotFoundError:
-            pass
+        # A listing URL can't be a document id (it contains '/'), so only attempt a point
+        # read when ref looks like a key; otherwise resolve it by querying on the url field.
+        if "://" not in ref:
+            try:
+                self._listings.read_item(item=ref, partition_key=ref)
+                return ref
+            except exceptions.CosmosResourceNotFoundError:
+                pass
         rows = list(self._listings.query_items(
             query="SELECT c.key FROM c WHERE c.url=@u",
             parameters=[{"name": "@u", "value": ref}],
+            enable_cross_partition_query=True,
         ))
         return rows[0]["key"] if rows else None
 
@@ -190,7 +197,8 @@ class CosmosStore:
 
     def taste_summary(self, recent: int = 6) -> dict:
         rows = list(self._feedback.query_items(
-            query="SELECT c.sentiment, c.comment, c.bucket, c.district, c.created FROM c"
+            query="SELECT c.sentiment, c.comment, c.bucket, c.district, c.created FROM c",
+            enable_cross_partition_query=True,
         ))
         rows.sort(key=lambda r: r.get("created", ""), reverse=True)
         liked = sum(1 for r in rows if (r.get("sentiment") or 0) > 0)

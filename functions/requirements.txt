@@ -3,5 +3,5 @@ azure-functions
 httpx
 curl_cffi
 openai
-azure-cosmos
+azure-cosmos>=4.5.1
 azure-identity

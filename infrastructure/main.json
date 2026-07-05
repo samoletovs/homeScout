@@ -1,0 +1,371 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.41.2.15936",
+      "templateHash": "10762690713415503721"
+    }
+  },
+  "parameters": {
+    "projectName": {
+      "type": "string",
+      "defaultValue": "homescout",
+      "metadata": {
+        "description": "Project name (lowerCamelCase, flatcase for resource names)"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "northeurope",
+      "metadata": {
+        "description": "Azure region"
+      }
+    },
+    "commLanguage": {
+      "type": "string",
+      "defaultValue": "ru",
+      "metadata": {
+        "description": "Family communication language (data stays English)"
+      }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id)]",
+    "tags": {
+      "project": "[parameters('projectName')]",
+      "managedBy": "bicep",
+      "costCenter": "naurolabs-research"
+    },
+    "containers": [
+      {
+        "name": "listings",
+        "pk": "/key"
+      },
+      {
+        "name": "feedback",
+        "pk": "/listing_key"
+      },
+      {
+        "name": "geocache",
+        "pk": "/id"
+      }
+    ]
+  },
+  "resources": [
+    {
+      "type": "Microsoft.DocumentDB/databaseAccounts",
+      "apiVersion": "2024-11-15",
+      "name": "[format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]",
+      "kind": "GlobalDocumentDB",
+      "properties": {
+        "databaseAccountOfferType": "Standard",
+        "capabilities": [
+          {
+            "name": "EnableServerless"
+          }
+        ],
+        "consistencyPolicy": {
+          "defaultConsistencyLevel": "Session"
+        },
+        "disableLocalAuth": true,
+        "locations": [
+          {
+            "locationName": "[parameters('location')]",
+            "failoverPriority": 0
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases",
+      "apiVersion": "2024-11-15",
+      "name": "[format('{0}/{1}', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix')), 'homescout')]",
+      "properties": {
+        "resource": {
+          "id": "homescout"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix')))]"
+      ]
+    },
+    {
+      "copy": {
+        "name": "cosmosContainers",
+        "count": "[length(variables('containers'))]"
+      },
+      "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
+      "apiVersion": "2024-11-15",
+      "name": "[format('{0}/{1}/{2}', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix')), 'homescout', variables('containers')[copyIndex()].name)]",
+      "properties": {
+        "resource": {
+          "id": "[variables('containers')[copyIndex()].name]",
+          "partitionKey": {
+            "paths": [
+              "[variables('containers')[copyIndex()].pk]"
+            ],
+            "kind": "Hash"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix')), 'homescout')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[format('st{0}{1}', parameters('projectName'), variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true,
+        "allowBlobPublicAccess": false
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[format('{0}-plan-{1}', parameters('projectName'), variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "kind": "functionapp",
+      "properties": {
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-12-01",
+      "name": "[format('{0}-func-{1}', parameters('projectName'), variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('{0}-plan-{1}', parameters('projectName'), variables('suffix')))]",
+        "reserved": true,
+        "httpsOnly": true,
+        "siteConfig": {
+          "linuxFxVersion": "Python|3.11",
+          "ftpsState": "Disabled",
+          "minTlsVersion": "1.2",
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix={2}', format('st{0}{1}', parameters('projectName'), variables('suffix')), listKeys(resourceId('Microsoft.Storage/storageAccounts', format('st{0}{1}', parameters('projectName'), variables('suffix'))), '2023-05-01').keys[0].value, environment().suffixes.storage)]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "python"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', format('monitoring-{0}', parameters('projectName'))), '2025-04-01').outputs.connectionString.value]"
+            },
+            {
+              "name": "COSMOS_ENDPOINT",
+              "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix'))), '2024-11-15').documentEndpoint]"
+            },
+            {
+              "name": "COSMOS_DATABASE",
+              "value": "homescout"
+            },
+            {
+              "name": "HOMESCOUT_LANG",
+              "value": "[parameters('commLanguage')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix')))]",
+        "[resourceId('Microsoft.Resources/deployments', format('monitoring-{0}', parameters('projectName')))]",
+        "[resourceId('Microsoft.Web/serverfarms', format('{0}-plan-{1}', parameters('projectName'), variables('suffix')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', format('st{0}{1}', parameters('projectName'), variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments",
+      "apiVersion": "2024-11-15",
+      "name": "[format('{0}/{1}', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix')), guid(resourceId('Microsoft.DocumentDB/databaseAccounts', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix'))), resourceId('Microsoft.Web/sites', format('{0}-func-{1}', parameters('projectName'), variables('suffix'))), '00000000-0000-0000-0000-000000000002'))]",
+      "properties": {
+        "roleDefinitionId": "[format('{0}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002', resourceId('Microsoft.DocumentDB/databaseAccounts', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix'))))]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', format('{0}-func-{1}', parameters('projectName'), variables('suffix'))), '2023-12-01', 'full').identity.principalId]",
+        "scope": "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix')))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix')))]",
+        "[resourceId('Microsoft.Web/sites', format('{0}-func-{1}', parameters('projectName'), variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('monitoring-{0}', parameters('projectName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "projectName": {
+            "value": "[parameters('projectName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "16652730387967002707"
+            }
+          },
+          "parameters": {
+            "projectName": {
+              "type": "string",
+              "metadata": {
+                "description": "Project name used for resource naming"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "northeurope",
+              "metadata": {
+                "description": "Azure region"
+              }
+            },
+            "retentionInDays": {
+              "type": "int",
+              "defaultValue": 30,
+              "metadata": {
+                "description": "Log Analytics retention in days"
+              }
+            },
+            "dailyQuotaGb": {
+              "type": "string",
+              "defaultValue": "0.1",
+              "metadata": {
+                "description": "Daily cap in GB (0.1 = ~100MB/day, good for dev)"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Resource tags"
+              }
+            }
+          },
+          "variables": {
+            "lawName": "[format('{0}-law', parameters('projectName'))]",
+            "aiName": "[format('{0}-ai', parameters('projectName'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[variables('lawName')]",
+              "location": "[parameters('location')]",
+              "tags": "[union(parameters('tags'), createObject('project', parameters('projectName'), 'managedBy', 'bicep'))]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": "[parameters('retentionInDays')]",
+                "workspaceCapping": {
+                  "dailyQuotaGb": "[json(parameters('dailyQuotaGb'))]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[variables('aiName')]",
+              "location": "[parameters('location')]",
+              "kind": "web",
+              "tags": "[union(parameters('tags'), createObject('project', parameters('projectName'), 'managedBy', 'bicep'))]",
+              "properties": {
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('lawName'))]",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('lawName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "connectionString": {
+              "type": "string",
+              "metadata": {
+                "description": "Connection string for Application Insights"
+              },
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString]"
+            },
+            "instrumentationKey": {
+              "type": "string",
+              "metadata": {
+                "description": "Instrumentation key for Application Insights"
+              },
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').InstrumentationKey]"
+            },
+            "workspaceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Log Analytics workspace ID"
+              },
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('lawName'))]"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "functionAppName": {
+      "type": "string",
+      "value": "[format('{0}-func-{1}', parameters('projectName'), variables('suffix'))]"
+    },
+    "cosmosEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', format('{0}-cosmos-{1}', parameters('projectName'), variables('suffix'))), '2024-11-15').documentEndpoint]"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "value": "[format('st{0}{1}', parameters('projectName'), variables('suffix'))]"
+    },
+    "appInsightsConnectionString": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('monitoring-{0}', parameters('projectName'))), '2025-04-01').outputs.connectionString.value]"
+    }
+  }
+}
