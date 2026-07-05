@@ -94,7 +94,7 @@ Functions patterns.
 1. ✅ **MVP (built)** — ss.lv RSS + city24 JSON → dedupe/store → Telegram alerts.
 2. ✅ **Enrichment (built)** — geocode + nearest school/kindergarten + commute (ORS) + €/m².
 3. ✅ **Valuation (built)** — €/m² vs VZD NĪTIS area medians → under/fair/over-priced.
-4. Scoring — hard filters + weighted-sum → ranked shortlist.
+4. ✅ **Scoring (built)** — hard filters + weighted-sum → ranked, ⭐-scored shortlist.
 5. Auction watch — izsoles scrape + due-diligence checklist.
 6. Dashboard + price history (SWA).
 

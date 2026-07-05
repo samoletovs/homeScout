@@ -63,8 +63,9 @@ offers and mortgage figures stay in the OneDrive `.me` vault
 
 ## Status
 
-**Phases 1–3 built** — ss.lv + city24 ingest, dedupe, Telegram alerts, enriched with
-commute / nearest school / kindergarten / €/m², and each apartment flagged **under / fair /
-over-priced** vs registered sold-deals (VZD NĪTIS). 40 passing tests. Off the default
-SWA-React golden path (Python Functions + Cosmos, like agentMode/mindMe) — deviation
-documented in [AGENTS.md](AGENTS.md). Next: weighted scoring → ranked shortlist (Phase 4).
+**Phases 1–4 built** — ss.lv + city24 ingest, dedupe, Telegram alerts, enriched with
+commute / nearest school / kindergarten / €/m², each apartment flagged **under / fair /
+over-priced** vs registered sold-deals (VZD NĪTIS), and listings **ranked by a weighted ⭐
+score**. 42 passing tests. Off the default SWA-React golden path (Python Functions + Cosmos,
+like agentMode/mindMe) — deviation documented in [AGENTS.md](AGENTS.md). Next: auction watch
+(Phase 5) + dashboard (Phase 6).
