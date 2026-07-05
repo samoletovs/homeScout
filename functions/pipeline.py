@@ -13,6 +13,7 @@ from adviser import advise
 from adviser import enabled as adviser_enabled
 from config import ADVISE_TOP_N, DB_PATH, ENRICH_CAP, USER_AGENT
 from enrich import enrich_all
+from feedback import format_taste_for_adviser
 from models import Listing
 from notify import TelegramNotifier
 from scoring import HardFilters, passes_hard_filters, score_listing
@@ -59,8 +60,10 @@ async def run_once(*, db_path: str = DB_PATH, notify_results: bool = True) -> li
                     listing.score, _ = score_listing(listing)
                 fresh.sort(key=lambda pair: pair[0].score or 0.0, reverse=True)
                 if adviser_enabled():
+                    taste = format_taste_for_adviser(store.taste_summary())
                     for listing, _ in fresh[:ADVISE_TOP_N]:
-                        listing.adviser = await advise(listing, store.area_stats(bucket_for(listing)))
+                        stats = store.area_stats(bucket_for(listing))
+                        listing.adviser = await advise(listing, stats, taste)
                 for listing, _ in fresh:  # persist the knowledge (score/valuation/adviser)
                     store.save_evaluation(listing, bucket_for(listing))
                 if notify_results:

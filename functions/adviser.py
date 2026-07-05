@@ -9,39 +9,24 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from config import (
-    AZURE_OPENAI_API_KEY,
-    AZURE_OPENAI_API_VERSION,
-    AZURE_OPENAI_DEPLOYMENT,
-    AZURE_OPENAI_ENDPOINT,
-    FAMILY_PROFILE,
-)
+from aoai import configured, get_client
+from config import AZURE_OPENAI_DEPLOYMENT, COMM_LANGUAGE, FAMILY_PROFILE
 from models import Listing
 
 log = logging.getLogger("homescout.adviser")
 
-_client = None
+LANG_NAMES = {"ru": "Russian", "en": "English", "lv": "Latvian"}
 
 
 def enabled() -> bool:
     """True if Azure OpenAI is configured for the adviser."""
-    return bool(AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY)
+    return configured()
 
 
-def _get_client():
-    global _client
-    if _client is None:
-        from openai import AsyncAzureOpenAI
-
-        _client = AsyncAzureOpenAI(
-            azure_endpoint=AZURE_OPENAI_ENDPOINT,
-            api_key=AZURE_OPENAI_API_KEY,
-            api_version=AZURE_OPENAI_API_VERSION,
-        )
-    return _client
-
-
-def build_messages(listing: Listing, stats: Optional[dict] = None) -> list[dict]:
+def build_messages(
+    listing: Listing, stats: Optional[dict] = None, taste: Optional[str] = None,
+    lang: str = COMM_LANGUAGE,
+) -> list[dict]:
     """Build the chat messages for a listing's take (pure — unit-testable)."""
     facts = [
         f"Area: {listing.district or '?'}",
@@ -63,24 +48,29 @@ def build_messages(listing: Listing, stats: Optional[dict] = None) -> list[dict]
     system = (
         "You are a sharp, friendly Latvian property buyer's agent advising one specific family. "
         "Be honest and concrete — no marketing language, no fluff. In 2-3 short sentences: whether "
-        "it fits them and why, the single biggest plus, and the main thing to check or negotiate.\n\n"
+        "it fits them and why, the single biggest plus, and the main thing to check or negotiate. "
+        f"Write your reply in {LANG_NAMES.get(lang, 'Russian')}.\n\n"
         f"The family: {FAMILY_PROFILE}"
     )
+    if taste:
+        system += f"\n\nLearned family preferences (weigh these): {taste}"
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": f"Listing:\n{context}\n\nYour take:"},
     ]
 
 
-async def advise(listing: Listing, stats: Optional[dict] = None) -> Optional[str]:
-    """Return a short adviser take, or None if the LLM isn't configured / fails."""
+async def advise(
+    listing: Listing, stats: Optional[dict] = None, taste: Optional[str] = None
+) -> Optional[str]:
+    """Return a short adviser take (in the family's language), or None if unconfigured / fails."""
     if not enabled():
         return None
     try:
-        resp = await _get_client().chat.completions.create(
+        resp = await get_client().chat.completions.create(
             model=AZURE_OPENAI_DEPLOYMENT,
-            messages=build_messages(listing, stats),
-            max_tokens=160,
+            messages=build_messages(listing, stats, taste),
+            max_tokens=180,
             temperature=0.4,
         )
         return (resp.choices[0].message.content or "").strip() or None

@@ -5,6 +5,7 @@ import logging
 import os
 from typing import TYPE_CHECKING, Optional
 
+from config import COMM_LANGUAGE
 from models import Listing
 
 if TYPE_CHECKING:
@@ -13,6 +14,18 @@ if TYPE_CHECKING:
 log = logging.getLogger("homescout.notify")
 
 _AREA_EMOJI = {"Rīga": "🏙️", "Jūrmala": "🏖️", "Mārupe": "🏡"}
+
+
+def _ru_plural(n: int, one: str, few: str, many: str) -> str:
+    nn = abs(n) % 100
+    if 11 <= nn <= 14:
+        return many
+    d = nn % 10
+    if d == 1:
+        return one
+    if 2 <= d <= 4:
+        return few
+    return many
 
 
 def format_listing(listing: Listing, reason: str = "new") -> str:
@@ -58,8 +71,12 @@ def format_listing(listing: Listing, reason: str = "new") -> str:
 def format_digest(items: list[tuple[Listing, str]], limit: int = 10) -> str:
     """One compact 'daily brief' message with the top-ranked new matches."""
     ranked = sorted(items, key=lambda pair: pair[0].score or 0.0, reverse=True)
-    plural = "" if len(items) == 1 else "es"
-    blocks = [f"🏠 homeScout daily brief — {len(items)} new match{plural}"]
+    n = len(items)
+    if COMM_LANGUAGE == "ru":
+        header = f"🏠 homeScout — {n} нов{_ru_plural(n, 'ый вариант', 'ых варианта', 'ых вариантов')}"
+    else:
+        header = f"🏠 homeScout daily brief — {n} new match{'' if n == 1 else 'es'}"
+    blocks = [header]
     for listing, reason in ranked[:limit]:
         star = f"⭐{listing.score:.2f} " if listing.score is not None else ""
         emoji = _AREA_EMOJI.get(listing.district or "", "📍")
@@ -90,7 +107,8 @@ def format_digest(items: list[tuple[Listing, str]], limit: int = 10) -> str:
         block += f"\n{listing.url}"
         blocks.append(block)
     if len(items) > limit:
-        blocks.append(f"\n…and {len(items) - limit} more")
+        extra = len(items) - limit
+        blocks.append(f"\n…и ещё {extra}" if COMM_LANGUAGE == "ru" else f"\n…and {extra} more")
     return "\n".join(blocks)
 
 

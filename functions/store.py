@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS listings (
 );
 CREATE TABLE IF NOT EXISTS price_history (key TEXT, price REAL, seen TEXT);
 CREATE TABLE IF NOT EXISTS geocache (q TEXT PRIMARY KEY, lat REAL, lon REAL);
+CREATE TABLE IF NOT EXISTS feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, listing_key TEXT, member TEXT,
+  sentiment INTEGER, comment TEXT, created TEXT
+);
 """
 
 
@@ -83,6 +87,50 @@ class Store:
             "SELECT COUNT(*), AVG(ppm2) FROM listings WHERE bucket=? AND ppm2 IS NOT NULL", (bucket,)
         ).fetchone()
         return {"count": row[0] or 0, "avg_ppm2": round(row[1], 1) if row[1] else None}
+
+    # ── Feedback / learning loop ────────────────────────────────────────
+    def key_for(self, ref: str) -> Optional[str]:
+        """Resolve a listing by its stored key or its URL."""
+        row = self.conn.execute(
+            "SELECT key FROM listings WHERE key=? OR url=? LIMIT 1", (ref, ref)
+        ).fetchone()
+        return row[0] if row else None
+
+    def add_feedback(self, listing_key: str, member: str, sentiment: int, comment: Optional[str]) -> None:
+        self.conn.execute(
+            "INSERT INTO feedback(listing_key, member, sentiment, comment, created) VALUES(?,?,?,?,?)",
+            (listing_key, member, sentiment, comment, _now()),
+        )
+        self.conn.commit()
+
+    def feedback_for(self, listing_key: str) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT member, sentiment, comment, created FROM feedback WHERE listing_key=? ORDER BY id",
+            (listing_key,),
+        ).fetchall()
+        return [{"member": r[0], "sentiment": r[1], "comment": r[2], "created": r[3]} for r in rows]
+
+    def taste_summary(self, recent: int = 6) -> dict:
+        """Aggregate learned family taste (likes/dislikes by area + recent comments)."""
+        rows = self.conn.execute(
+            "SELECT f.sentiment, f.comment, l.bucket, l.district FROM feedback f "
+            "LEFT JOIN listings l ON l.key = f.listing_key ORDER BY f.id DESC"
+        ).fetchall()
+        liked = sum(1 for r in rows if r[0] and r[0] > 0)
+        disliked = sum(1 for r in rows if r[0] and r[0] < 0)
+        by_area: dict = {}
+        for sentiment, _comment, bucket, district in rows:
+            area = bucket or district or "?"
+            counts = by_area.setdefault(area, {"like": 0, "dislike": 0})
+            if sentiment and sentiment > 0:
+                counts["like"] += 1
+            elif sentiment and sentiment < 0:
+                counts["dislike"] += 1
+        recent_notes = [
+            {"sentiment": r[0], "comment": r[1], "area": r[2] or r[3] or "?"}
+            for r in rows[:recent] if r[1]
+        ]
+        return {"liked": liked, "disliked": disliked, "by_area": by_area, "recent": recent_notes}
 
     def filter_new(self, listings: list[Listing]) -> list[tuple[Listing, str]]:
         """Persist all listings; return (listing, reason) for new or price-dropped ones.

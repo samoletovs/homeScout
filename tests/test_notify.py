@@ -44,11 +44,10 @@ class DigestTests(unittest.TestCase):
             (Listing(id="3", source="x", url="u3", district="Jūrmala", price=150000, score=0.60), "new"),
         ]
         msg = format_digest(items, limit=2)
-        self.assertIn("homeScout daily brief", msg)
-        self.assertIn("3 new matches", msg)
-        self.assertIn("u2", msg)        # top-ranked kept
-        self.assertNotIn("u1", msg)     # lowest dropped by limit
-        self.assertIn("and 1 more", msg)
+        self.assertIn("homeScout", msg)   # header present (language-agnostic)
+        self.assertIn("u2", msg)          # rank 1 kept
+        self.assertIn("u3", msg)          # rank 2 kept
+        self.assertNotIn("u1", msg)       # rank 3 dropped by limit
 
 
 if __name__ == "__main__":

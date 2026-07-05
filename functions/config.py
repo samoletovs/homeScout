@@ -70,3 +70,6 @@ FAMILY_PROFILE = os.getenv(
     "access (a parent travels for work; a child plays football in Rīga), school proximity, "
     "space, near water, fair price vs the area, newer/efficient. Watching steadily 6-12 months.",
 )
+
+# Family communication language (stored data stays English). ru = Russian.
+COMM_LANGUAGE = os.getenv("HOMESCOUT_LANG", "ru")

@@ -18,6 +18,18 @@ a **daily brief** of ranked matches. Delivery reuses the family's existing **ili
 agentMode's simpler `property_search` skill keeps running; homeScout runs alongside as the
 advanced adviser and supersedes the old skill once trusted.
 
+## Feedback, learning & language
+
+- **Learning loop:** the family 👍/👎 + comments on listings via `feedback.ingest` (the
+  channel-agnostic intake). Judgments *and* feedback are persisted; `store.taste_summary()`
+  feeds the adviser so it weighs learned preferences over time. Test it now with
+  `scripts/feedback.py <url> like "комментарий"`.
+- **Language:** the family communicates in **Russian**; stored data stays **English**. The
+  adviser writes its take in `COMM_LANGUAGE` (ru); inbound comments are translated to English
+  (`translate.to_english`) before storage.
+- **agentMode gate (planned):** agentMode captures a Telegram reply (text or transcribed
+  voice) to a brief, maps 👍/👎 or infers sentiment, and calls `feedback.ingest`.
+
 ## Build / test / verify
 
 ```bash
