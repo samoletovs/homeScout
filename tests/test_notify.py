@@ -42,6 +42,14 @@ class CardTests(unittest.TestCase):
         self.assertIn("hs:1:ss.lv:1", datas)
         self.assertIn("hs:-1:ss.lv:1", datas)
 
+    def test_callback_data_within_telegram_limit(self):
+        # Telegram rejects callback_data over 64 bytes (BUTTON_DATA_INVALID).
+        from models import Listing
+        lst = Listing(id="epjdd", source="ss.lv", url="https://www.ss.lv/msg/lv/real-estate/x.html")
+        for row in feedback_buttons(lst):
+            for btn in row:
+                self.assertLessEqual(len(btn["callback_data"].encode()), 64)
+
     def test_listing_shows_adviser_take(self):
         lst = _listing()
         lst.adviser = "Great fit near the school."

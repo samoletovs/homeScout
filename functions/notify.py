@@ -1,6 +1,7 @@
 """Telegram notifier + message formatting."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import TYPE_CHECKING, Optional
@@ -187,7 +188,8 @@ class TelegramNotifier:
             return 0
 
     async def send_cards(
-        self, items: list[tuple[Listing, str]], client: "httpx.AsyncClient", top_n: int = 5
+        self, items: list[tuple[Listing, str]], client: "httpx.AsyncClient", top_n: int = 5,
+        pause_s: float = 1.1,
     ) -> int:
         """Send the top-N listings as individual cards with 👍/👎 buttons.
 
@@ -203,6 +205,8 @@ class TelegramNotifier:
             return 0
         sent = 0
         for listing, reason in ranked:
+            # Telegram throttles bursts to one chat (~1 msg/s) — pace the cards.
+            await asyncio.sleep(pause_s)
             try:
                 resp = await client.post(
                     f"https://api.telegram.org/bot{self.token}/sendMessage",
@@ -215,6 +219,7 @@ class TelegramNotifier:
                 )
                 resp.raise_for_status()
                 sent += 1
-            except Exception:
-                log.exception("telegram card send failed")
+            except Exception as exc:
+                body = getattr(getattr(exc, "response", None), "text", "")
+                log.warning("telegram card send failed: %s %s", exc, body[:200])
         return sent

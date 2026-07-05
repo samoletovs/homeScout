@@ -37,6 +37,7 @@ class SsLvParserTests(unittest.TestCase):
         self.assertEqual(lst.district, "Vecrīga")
         self.assertEqual(lst.source, "ss.lv")
         self.assertTrue(lst.url.endswith("bpmih.html"))
+        self.assertEqual(lst.id, "bpmih")  # compact slug id, not the full URL
 
     def test_price_per_m2_is_computed(self):
         lst = parse_sslv(SSLV_XML, "Rīga")[0]

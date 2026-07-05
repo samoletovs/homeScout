@@ -27,6 +27,19 @@ def _num(text: Optional[str]) -> Optional[float]:
     return float(match.group(0)) if match else None
 
 
+def _sslv_id(link: str) -> str:
+    """Compact, stable id from an ss.lv listing URL (its unique message slug).
+
+    ss.lv URLs look like '.../marupe/epjdd.html' — the 'epjdd' stem is the site-wide
+    unique ad id. Using it (not the full URL) keeps the store key and Telegram button
+    callback_data (max 64 bytes) short.
+    """
+    slug = link.rstrip("/").rsplit("/", 1)[-1].split("?")[0]
+    if slug.endswith(".html"):
+        slug = slug[:-5]
+    return slug or link
+
+
 def parse_sslv(xml_text: str, area_hint: str = "", property_type: str = "apartment") -> list[Listing]:
     """Parse an ss.lv real-estate RSS feed into sale Listings (rentals skipped)."""
     try:
@@ -49,7 +62,7 @@ def parse_sslv(xml_text: str, area_hint: str = "", property_type: str = "apartme
         rooms = _num(_field(desc, "Ist."))
         listings.append(
             Listing(
-                id=link,
+                id=_sslv_id(link),
                 source="ss.lv",
                 url=link,
                 title=html.unescape((item.findtext("title") or "").strip())[:120],
