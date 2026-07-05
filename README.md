@@ -45,13 +45,14 @@ does a real fetch and seeds the dedup store on first run.
   - `sources.py` — portal adapters (ss.lv, city24; izsoles/NĪTIS stubs)
   - `parsers.py` — pure payload → `Listing` parsers
   - `enrich.py` / `geo.py` — geocode, nearest school/kindergarten, commute
-  - `pipeline.py` — ingest → dedupe → store → enrich → notify
+  - `valuation.py` — €/m² vs area sold-deal medians (VZD NĪTIS)
+  - `pipeline.py` — ingest → dedupe → store → enrich → value → notify
   - `scoring.py` — hard filters + weighted-sum (used from Phase 4)
   - `store.py` — SQLite dedup + price history + geocode cache
   - `models.py` — `Listing` / `Deal` / `ScoredListing`
 - `infrastructure/` — Bicep (monitoring + Functions + Cosmos)
-- `tests/` — 30 offline unit tests
-- `scripts/` — `run_once.py` (live run), `refresh_amenities.py` (dataset refresh)
+- `tests/` — 40 offline unit tests
+- `scripts/` — `run_once.py`; `refresh_amenities.py` + `refresh_deals.py` (dataset refresh)
 
 ## Privacy
 
@@ -62,7 +63,8 @@ offers and mortgage figures stay in the OneDrive `.me` vault
 
 ## Status
 
-**Phases 1–2 built** — ss.lv + city24 ingest, dedupe, and Telegram alerts, now enriched
-with commute time, nearest school/kindergarten, and €/m² (30 passing tests). Off the
-default SWA-React golden path (Python Functions + Cosmos, like agentMode/mindMe) —
-deviation documented in [AGENTS.md](AGENTS.md). Next: valuation vs VZD NĪTIS deals (Phase 3).
+**Phases 1–3 built** — ss.lv + city24 ingest, dedupe, Telegram alerts, enriched with
+commute / nearest school / kindergarten / €/m², and each apartment flagged **under / fair /
+over-priced** vs registered sold-deals (VZD NĪTIS). 40 passing tests. Off the default
+SWA-React golden path (Python Functions + Cosmos, like agentMode/mindMe) — deviation
+documented in [AGENTS.md](AGENTS.md). Next: weighted scoring → ranked shortlist (Phase 4).

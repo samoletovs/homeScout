@@ -27,7 +27,7 @@ def _num(text: Optional[str]) -> Optional[float]:
     return float(match.group(0)) if match else None
 
 
-def parse_sslv(xml_text: str, area_hint: str = "") -> list[Listing]:
+def parse_sslv(xml_text: str, area_hint: str = "", property_type: str = "apartment") -> list[Listing]:
     """Parse an ss.lv real-estate RSS feed into sale Listings (rentals skipped)."""
     try:
         root = ET.fromstring(xml_text)
@@ -59,6 +59,7 @@ def parse_sslv(xml_text: str, area_hint: str = "") -> list[Listing]:
                 floor=_field(desc, "Stāvs"),
                 district=_field(desc, "Pagasts") or area_hint,
                 description=area_hint,
+                property_type=property_type,
             )
         )
     return listings
@@ -107,9 +108,11 @@ def parse_city24(objs: list[dict], target_areas: Optional[set[str]] = None) -> l
                     rooms=int(rooms) if rooms else None,
                     floor=floor,
                     district=district,
+                    description=addr.get("city_name") or addr.get("county_name") or "",
                     lat=obj.get("latitude"),
                     lon=obj.get("longitude"),
                     energy_class=energy,
+                    property_type="apartment",
                 )
             )
         except Exception:

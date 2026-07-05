@@ -24,11 +24,13 @@ class Listing:
     energy_class: Optional[str] = None
     description: str = ""
     is_auction: bool = False
+    property_type: str = "apartment"
     # --- enrichment (filled by the pipeline) ---
     commute_min: Optional[float] = None
     flood_risk: bool = False
     nearest_school_km: Optional[float] = None
     nearest_kindergarten_km: Optional[float] = None
+    valuation: Optional[str] = None
     features: dict = field(default_factory=dict)
     first_seen: Optional[datetime] = None
 

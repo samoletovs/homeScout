@@ -1,0 +1,29 @@
+{
+  "source": "VZD NĪTIS via data.gov.lv (CC BY 4.0)",
+  "generated": "2026-07-05",
+  "window_years": [
+    2025,
+    2026
+  ],
+  "unit": "eur_per_m2_apartment",
+  "buckets": {
+    "Rīga": {
+      "median_ppm2": 1194.9,
+      "p25_ppm2": 876.6,
+      "p75_ppm2": 1944.2,
+      "count": 16377
+    },
+    "Jūrmala": {
+      "median_ppm2": 1072.9,
+      "p25_ppm2": 769.0,
+      "p75_ppm2": 1705.8,
+      "count": 846
+    },
+    "Mārupe": {
+      "median_ppm2": 1980.2,
+      "p25_ppm2": 1494.8,
+      "p75_ppm2": 2683.5,
+      "count": 491
+    }
+  }
+}

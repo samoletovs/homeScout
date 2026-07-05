@@ -21,11 +21,11 @@ log = logging.getLogger("homescout.sources")
 
 async def fetch_sslv(client: "httpx.AsyncClient") -> list[Listing]:
     listings: list[Listing] = []
-    for url, area in SSLV_FEEDS:
+    for url, area, kind in SSLV_FEEDS:
         try:
             resp = await client.get(url)
             resp.raise_for_status()
-            items = parse_sslv(resp.text, area)
+            items = parse_sslv(resp.text, area, kind)
             if items:
                 log.info("ss.lv %s: %d sale listings", area, len(items))
             else:

@@ -25,6 +25,9 @@ def format_listing(listing: Listing, reason: str = "new") -> str:
     price = f"€{listing.price:,.0f}" if listing.price else "n/a"
     ppm2 = listing.price_per_m2
     lines.append(f"💶 {price}" + (f"  ·  {ppm2:,.0f} €/m²" if ppm2 else ""))
+    if listing.valuation:
+        mark = "🟢" if listing.valuation.startswith("under") else "🔴" if listing.valuation.startswith("over") else "⚪"
+        lines.append(f"{mark} {listing.valuation}")
     facts = []
     if listing.rooms:
         facts.append(f"{listing.rooms} rooms")

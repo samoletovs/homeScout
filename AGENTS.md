@@ -23,23 +23,25 @@ python ../scripts/run_once.py           # LIVE fetch: ss.lv + city24 → prints 
 ```
 functions/
 ├── function_app.py   # Azure Functions entry (timer trigger → pipeline.run_once)
-├── pipeline.py       # ingest → dedupe → store(seen) → enrich → notify
+├── pipeline.py       # ingest → dedupe → store(seen) → enrich → value → notify
 ├── sources.py        # async fetchers: ss.lv RSS + city24 (curl_cffi); izsoles/NĪTIS stubs
 ├── parsers.py        # pure payload → Listing parsers (unit-tested)
 ├── enrich.py         # geocode (Nominatim) + nearest school/kindergarten (local OSM) + commute (ORS)
+├── valuation.py      # €/m² vs area sold-deal medians (VZD NĪTIS) → under/fair/over
 ├── geo.py            # pure geo helpers: haversine, parsing, proximity score
 ├── store.py          # SQLite dedup / seen-state + price history + geocode cache
 ├── notify.py         # Telegram sender + message formatting
 ├── config.py         # feeds, target areas, enrichment endpoints, env
 ├── scoring.py        # hard filters + deterministic weighted-sum (used from Phase 4)
 ├── models.py         # Listing / Deal / ScoredListing (dataclasses, stdlib)
-├── assets/lv_amenities.json   # committed OSM schools+kindergartens (ODbL)
+├── assets/           # committed datasets: lv_amenities.json (OSM), lv_deals.json (NĪTIS)
 ├── host.json
 └── requirements.txt
 infrastructure/main.bicep    # monitoring module + (TODO) Functions + Cosmos
-tests/                       # parsers/store/notify/scoring/geo/enrich (30 tests)
+tests/                       # parsers/store/notify/scoring/geo/enrich/valuation (40 tests)
 scripts/run_once.py          # local one-shot runner (live fetch)
-scripts/refresh_amenities.py # refresh the committed OSM amenities dataset
+scripts/refresh_amenities.py # refresh committed OSM amenities dataset
+scripts/refresh_deals.py     # refresh committed NĪTIS valuation index
 ```
 
 ## Data sources (verified endpoints)
@@ -91,7 +93,7 @@ Functions patterns.
 
 1. ✅ **MVP (built)** — ss.lv RSS + city24 JSON → dedupe/store → Telegram alerts.
 2. ✅ **Enrichment (built)** — geocode + nearest school/kindergarten + commute (ORS) + €/m².
-3. Valuation — €/m² vs NĪTIS comparables → over/under-priced.
+3. ✅ **Valuation (built)** — €/m² vs VZD NĪTIS area medians → under/fair/over-priced.
 4. Scoring — hard filters + weighted-sum → ranked shortlist.
 5. Auction watch — izsoles scrape + due-diligence checklist.
 6. Dashboard + price history (SWA).
@@ -108,6 +110,9 @@ Functions patterns.
 - **Schools/kindergartens** use a committed OSM snapshot (`functions/assets/lv_amenities.json`,
   greater-Rīga bbox); refresh with `scripts/refresh_amenities.py`. ss.lv listings are
   geocoded at **district level** (Nominatim), so distances are approximate.
+- **Valuation is apartment-only and area-median** (VZD NĪTIS, 2025–2026): precise for
+  Mārupe/Jūrmala (small, uniform) but only a rough guide for Rīga (city-wide median vs
+  heterogeneous neighborhoods). Refresh with `scripts/refresh_deals.py`.
 - **Flood risk** is not yet wired (Phase 2.1 — ĢEOLatvija WFS point-in-polygon).
 - Telegram send is a no-op (logs alerts) until `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`
   are set.

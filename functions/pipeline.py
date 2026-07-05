@@ -16,6 +16,7 @@ from notify import TelegramNotifier
 from scoring import HardFilters, passes_hard_filters
 from sources import fetch_all
 from store import Store
+from valuation import value_listing
 
 log = logging.getLogger("homescout.pipeline")
 
@@ -49,7 +50,10 @@ async def run_once(*, db_path: str = DB_PATH, notify_results: bool = True) -> li
             if seeding:
                 log.info("first run — seeded %d listings, no alerts sent", len(fresh))
             elif fresh:
-                await enrich_all([lst for lst, _ in fresh], client, store, cap=ENRICH_CAP)
+                fresh_listings = [lst for lst, _ in fresh]
+                await enrich_all(fresh_listings, client, store, cap=ENRICH_CAP)
+                for listing in fresh_listings:
+                    value_listing(listing)
                 if notify_results:
                     sent = await TelegramNotifier().send_all(fresh, client)
                     log.info("telegram: sent %d/%d", sent, len(fresh))

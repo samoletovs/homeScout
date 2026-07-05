@@ -8,11 +8,11 @@ USER_AGENT = "Mozilla/5.0 homeScout/0.1 (+https://github.com/samoletovs/homeScou
 _SS = "https://www.ss.lv/lv/real-estate"
 
 # ss.lv sale RSS feeds (URL, area label). The '/sell/' segment excludes rentals.
-SSLV_FEEDS: list[tuple[str, str]] = [
-    (f"{_SS}/flats/riga/sell/rss/", "Rīga"),
-    (f"{_SS}/flats/jurmala/sell/rss/", "Jūrmala"),
-    (f"{_SS}/flats/riga-region/marupes-pag/marupe/sell/rss/", "Mārupe"),
-    (f"{_SS}/homes-summer-residences/riga-region/marupes-pag/marupe/sell/rss/", "Mārupe"),
+SSLV_FEEDS: list[tuple[str, str, str]] = [
+    (f"{_SS}/flats/riga/sell/rss/", "Rīga", "apartment"),
+    (f"{_SS}/flats/jurmala/sell/rss/", "Jūrmala", "apartment"),
+    (f"{_SS}/flats/riga-region/marupes-pag/marupe/sell/rss/", "Mārupe", "apartment"),
+    (f"{_SS}/homes-summer-residences/riga-region/marupes-pag/marupe/sell/rss/", "Mārupe", "house"),
 ]
 
 # city24 sale apartments (Latvia-wide); filtered client-side to the target areas.
