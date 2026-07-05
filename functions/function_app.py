@@ -8,8 +8,8 @@ from pipeline import run_once
 app = func.FunctionApp()
 
 
-# Every 30 minutes (ss.lv RSS ttl is ~5 min; 30 min is polite and sufficient).
-@app.timer_trigger(schedule="0 */30 * * * *", arg_name="timer", run_on_startup=False)
+# Daily at 08:00 UTC — one "daily brief" digest of the day's new matches.
+@app.timer_trigger(schedule="0 0 8 * * *", arg_name="timer", run_on_startup=False)
 async def poll_listings(timer: func.TimerRequest) -> None:
     if timer.past_due:
         logging.warning("timer past due — running anyway")

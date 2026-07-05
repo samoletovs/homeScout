@@ -6,7 +6,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "functions"))
 
 from models import Listing  # noqa: E402
-from notify import TelegramNotifier, format_listing  # noqa: E402
+from notify import TelegramNotifier, format_digest, format_listing  # noqa: E402
 
 
 def _listing() -> Listing:
@@ -34,6 +34,21 @@ class NotifierTests(unittest.TestCase):
 
     def test_enabled_with_credentials(self):
         self.assertTrue(TelegramNotifier(token="t", chat_id="c").enabled)
+
+
+class DigestTests(unittest.TestCase):
+    def test_digest_ranks_and_limits(self):
+        items = [
+            (Listing(id="1", source="x", url="u1", district="Rīga", price=100000, score=0.40), "new"),
+            (Listing(id="2", source="x", url="u2", district="Mārupe", price=200000, score=0.80), "new"),
+            (Listing(id="3", source="x", url="u3", district="Jūrmala", price=150000, score=0.60), "new"),
+        ]
+        msg = format_digest(items, limit=2)
+        self.assertIn("homeScout daily brief", msg)
+        self.assertIn("3 new matches", msg)
+        self.assertIn("u2", msg)        # top-ranked kept
+        self.assertNotIn("u1", msg)     # lowest dropped by limit
+        self.assertIn("and 1 more", msg)
 
 
 if __name__ == "__main__":

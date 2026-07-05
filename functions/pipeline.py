@@ -57,8 +57,8 @@ async def run_once(*, db_path: str = DB_PATH, notify_results: bool = True) -> li
                     listing.score, _ = score_listing(listing)
                 fresh.sort(key=lambda pair: pair[0].score or 0.0, reverse=True)
                 if notify_results:
-                    sent = await TelegramNotifier().send_all(fresh, client)
-                    log.info("telegram: sent %d/%d", sent, len(fresh))
+                    sent = await TelegramNotifier().send_digest(fresh, client)
+                    log.info("telegram digest sent=%d listings=%d", sent, len(fresh))
         return fresh
     finally:
         store.close()

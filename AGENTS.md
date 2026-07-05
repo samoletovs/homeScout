@@ -9,6 +9,15 @@ Ingests new listings, values them against real sold-deal data, watches auctions,
 scores, and alerts a ranked shortlist. Python Azure Functions (v2) + Cosmos + Telegram,
 with an optional SWA dashboard. Grew out of agentMode's `property_search` skill.
 
+## North star & delivery
+
+homeScout is a **professional property adviser**, not just a notifier — it reasons about each
+place (fair price vs the area, commute/airport, schools, pros/cons, what to check) and delivers
+a **daily brief** of ranked matches. Delivery reuses the family's existing **ilitut.ilitam bot
+(agentMode)** — same bot token (Key Vault) + family chat, no new bot. During transition,
+agentMode's simpler `property_search` skill keeps running; homeScout runs alongside as the
+advanced adviser and supersedes the old skill once trusted.
+
 ## Build / test / verify
 
 ```bash

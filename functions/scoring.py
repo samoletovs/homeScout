@@ -7,6 +7,7 @@ dig report §C (2026-07-04-ai-property-hunt-system-latvia).
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -15,10 +16,10 @@ from models import Listing
 # Criteria importance weights (1–5). Sensible defaults — personalise per user.
 # Only criteria we actually populate today are scored; others arrive with LLM extraction.
 WEIGHTS: dict[str, int] = {
-    "value": 5,         # under/over-priced vs area (VZD NĪTIS)   (benefit)
-    "commute": 5,       # minutes to centre/work                 (cost)
-    "schools": 4,       # nearest school/kindergarten            (benefit)
-    "size": 4,          # usable m²                              (benefit)
+    "commute": 5,       # city / airport access                  (cost)
+    "schools": 5,       # nearest school/kindergarten            (benefit)
+    "size": 4,          # usable m² (space + home office)         (benefit)
+    "value": 4,         # under/over-priced vs area (VZD NĪTIS)   (benefit)
     "price_per_m2": 3,  # absolute €/m²                          (cost)
     "energy": 3,        # energy class running cost              (cost)
 }
@@ -49,6 +50,7 @@ class HardFilters:
     min_rooms: Optional[int] = None
     max_commute_min: Optional[float] = None
     exclude_flood: bool = True
+    exclude_ground_floor: bool = False
 
     @classmethod
     def from_env(cls) -> "HardFilters":
@@ -62,7 +64,16 @@ class HardFilters:
             min_rooms=int(rooms) if rooms else None,
             max_commute_min=_num("HOMESCOUT_MAX_COMMUTE"),
             exclude_flood=os.getenv("HOMESCOUT_EXCLUDE_FLOOD", "1") != "0",
+            exclude_ground_floor=os.getenv("HOMESCOUT_EXCLUDE_GROUND", "0") != "0",
         )
+
+
+def _floor_num(floor: Optional[str]) -> Optional[int]:
+    """Current floor from a 'n/total' string (ground floor == 1 in Latvia)."""
+    if not floor:
+        return None
+    match = re.match(r"\s*(\d+)", floor)
+    return int(match.group(1)) if match else None
 
 
 def passes_hard_filters(listing: Listing, f: HardFilters) -> bool:
@@ -78,6 +89,8 @@ def passes_hard_filters(listing: Listing, f: HardFilters) -> bool:
     ):
         return False
     if f.exclude_flood and listing.flood_risk:
+        return False
+    if f.exclude_ground_floor and _floor_num(listing.floor) == 1:
         return False
     return True
 

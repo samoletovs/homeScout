@@ -44,6 +44,12 @@ class HardFilterTests(unittest.TestCase):
             passes_hard_filters(Listing(id="1", source="x", url="", flood_risk=True), f)
         )
 
+    def test_rejects_ground_floor_when_excluded(self):
+        f = HardFilters(exclude_ground_floor=True)
+        self.assertFalse(passes_hard_filters(Listing(id="1", source="x", url="", floor="1/5"), f))
+        self.assertTrue(passes_hard_filters(Listing(id="2", source="x", url="", floor="3/5"), f))
+        self.assertTrue(passes_hard_filters(Listing(id="3", source="x", url="", floor=None), f))
+
 
 class ScoreListingTests(unittest.TestCase):
     def test_energy_class_maps_into_score(self):

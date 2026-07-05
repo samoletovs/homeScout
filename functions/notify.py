@@ -55,6 +55,42 @@ def format_listing(listing: Listing, reason: str = "new") -> str:
     return "\n".join(lines)
 
 
+def format_digest(items: list[tuple[Listing, str]], limit: int = 10) -> str:
+    """One compact 'daily brief' message with the top-ranked new matches."""
+    ranked = sorted(items, key=lambda pair: pair[0].score or 0.0, reverse=True)
+    plural = "" if len(items) == 1 else "es"
+    blocks = [f"🏠 homeScout daily brief — {len(items)} new match{plural}"]
+    for listing, reason in ranked[:limit]:
+        star = f"⭐{listing.score:.2f} " if listing.score is not None else ""
+        emoji = _AREA_EMOJI.get(listing.district or "", "📍")
+        price = f"€{listing.price:,.0f}" if listing.price else "n/a"
+        ppm2 = listing.price_per_m2
+        facts = []
+        if listing.rooms:
+            facts.append(f"{listing.rooms}r")
+        if listing.area_m2:
+            facts.append(f"{listing.area_m2:g}m²")
+        if listing.commute_min:
+            facts.append(f"~{listing.commute_min:g}min")
+        if listing.nearest_school_km is not None:
+            facts.append(f"school {listing.nearest_school_km:g}km")
+        val = ""
+        if listing.valuation:
+            mark = "🟢" if listing.valuation.startswith("under") else "🔴" if listing.valuation.startswith("over") else "⚪"
+            val = f"  {mark}{listing.valuation.split(' (')[0]}"
+        drop = " 📉" if reason == "price_drop" else ""
+        blocks.append(
+            f"\n{star}{emoji} {listing.district or '?'} · {price}"
+            + (f" · {ppm2:,.0f}€/m²" if ppm2 else "")
+            + val + drop
+            + (f"\n{'  ·  '.join(facts)}" if facts else "")
+            + f"\n{listing.url}"
+        )
+    if len(items) > limit:
+        blocks.append(f"\n…and {len(items) - limit} more")
+    return "\n".join(blocks)
+
+
 class TelegramNotifier:
     """Sends alert messages to a Telegram chat. No-ops (logs) if unconfigured."""
 
@@ -89,3 +125,25 @@ class TelegramNotifier:
         if len(items) > cap:
             log.info("%d further alert(s) suppressed this run", len(items) - cap)
         return sent
+
+    async def send_digest(
+        self, items: list[tuple[Listing, str]], client: "httpx.AsyncClient", limit: int = 10
+    ) -> int:
+        """Send one 'daily brief' digest with the top-ranked matches. Returns 1 if sent."""
+        if not items:
+            return 0
+        text = format_digest(items, limit)
+        if not self.enabled:
+            log.warning("Telegram not configured — daily brief of %d would be sent", len(items))
+            log.info("DIGEST: %s", text.replace("\n", " | "))
+            return 0
+        try:
+            resp = await client.post(
+                f"https://api.telegram.org/bot{self.token}/sendMessage",
+                json={"chat_id": self.chat_id, "text": text, "disable_web_page_preview": True},
+            )
+            resp.raise_for_status()
+            return 1
+        except Exception:
+            log.exception("telegram digest send failed")
+            return 0
