@@ -32,8 +32,27 @@ advanced adviser and supersedes the old skill once trusted.
   agentMode, `shared/homescout.py` captures a button tap or a text/voice **reply to a card**,
   infers sentiment (ru/en/lv/emoji), and POSTs to the endpoint → `feedback.record` →
   `ingest`. Enable it by setting `HOMESCOUT_FEEDBACK_URL` (URL incl. `?code=`) in agentMode;
-  unset, the gate is inert. The endpoint's SQLite lives on the persistent Azure `HOME` share
-  so feedback survives restarts and is shared with the daily timer.
+  unset, the gate is inert. The endpoint and the daily timer share one SQLite store — but
+  **durable cloud state needs Cosmos DB or a Dedicated/Premium plan** (serverless disks don't
+  persist; see Deploy).
+
+## Deploy — the durable-state decision (READ before deploying)
+
+homeScout keeps its seen-state + learned knowledge in SQLite. **Serverless Functions plans do
+not persist local disk** (Flex Consumption = 0 GB persisted; Linux Consumption is retired and
+persists only with an explicitly mounted Azure Files share). A straight serverless deploy
+would therefore lose dedup state and family feedback on every recycle — defeating the
+“gets smarter over time” goal. Pick one path **before** deploying:
+
+1. **Cosmos DB (recommended — golden path, free tier).** Move `store.py` behind its current
+   interface to a Cosmos-backed implementation (listings / price_history / geocache / feedback
+   as containers); keep SQLite for local dev + tests. Deploy the Function App on Flex
+   Consumption. Durable, ~free, scales to zero. (This is the long-standing config.py TODO.)
+2. **Dedicated (B1) / Premium plan.** Keep SQLite, mount the persistent HOME share, point
+   `HOMESCOUT_DB` at it. Minimal code change, but ~€13+/month and always-on.
+
+Until one is chosen, run the brief on demand with `scripts/run_once.py --preview --send`
+(local, and durable on your own machine) — it already produces the real ranked brief.
 
 ## Build / test / verify
 
@@ -42,6 +61,7 @@ cd functions
 pip install -r requirements.txt
 python -m unittest discover ../tests    # MUST pass (parser/scorer/store are stdlib-only)
 python ../scripts/run_once.py           # LIVE fetch: ss.lv + city24 → prints alertable listings
+python ../scripts/run_once.py --preview # LIVE brief on demand (rank + advise top; --send to Telegram)
 ```
 
 ## Project structure
@@ -64,8 +84,8 @@ functions/
 ├── host.json
 └── requirements.txt
 infrastructure/main.bicep    # monitoring module + (TODO) Functions + Cosmos
-tests/                       # parsers/store/notify/scoring/geo/enrich/valuation (40 tests)
-scripts/run_once.py          # local one-shot runner (live fetch)
+tests/                       # parsers/store/notify/scoring/geo/enrich/valuation/feedback/adviser (57 tests)
+scripts/run_once.py          # local runner: real run + --preview on-demand brief (live fetch)
 scripts/refresh_amenities.py # refresh committed OSM amenities dataset
 scripts/refresh_deals.py     # refresh committed NĪTIS valuation index
 ```

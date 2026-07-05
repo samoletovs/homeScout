@@ -22,14 +22,15 @@ CITY24_URL = (
 )
 CITY24_TARGET_AREAS = {"Rīga", "Jūrmala", "Mārupe", "Mārupes novads"}
 
-# Dedup/state + knowledge DB (git-ignored). On Azure Functions we place it under the
-# persistent, cross-instance HOME share (Azure Files) so scored judgments and family
-# feedback survive restarts and are shared between the daily timer and the feedback
-# endpoint. Locally it lives under ./data. Override with HOMESCOUT_DB. (Cosmos DB is the
-# future upgrade for higher write volume — see AGENTS.md.)
+# Dedup/state + knowledge DB (git-ignored). DURABILITY NOTE: serverless Functions plans do
+# NOT persist local disk (Flex Consumption = 0 GB persisted; Linux Consumption is retired).
+# So this SQLite file is durable **locally** and on a **Dedicated/Premium** plan (persistent
+# HOME share), but NOT on a serverless plan. For durable cloud state on the golden path,
+# move state to Cosmos DB (free tier) — see AGENTS.md “Deploy”. The HOME path below is used
+# on Azure when available (harmless; genuinely durable only on Dedicated/Premium).
 def _default_db() -> str:
     home = os.getenv("HOME")
-    if home and os.getenv("WEBSITE_INSTANCE_ID"):  # running on Azure Functions
+    if home and os.getenv("WEBSITE_INSTANCE_ID"):  # running on Azure App Service / Functions
         return os.path.join(home, "data", "homescout.sqlite")
     return "data/homescout.sqlite"
 
