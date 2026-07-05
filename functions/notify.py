@@ -19,7 +19,10 @@ def format_listing(listing: Listing, reason: str = "new") -> str:
     """Render a listing as a Telegram message body."""
     tag = "🆕 New listing" if reason == "new" else "📉 Price drop"
     emoji = _AREA_EMOJI.get(listing.district or "", "📍")
-    lines = [f"{tag} — {emoji} {listing.district or '?'}"]
+    header = f"{tag} — {emoji} {listing.district or '?'}"
+    if listing.score is not None:
+        header = f"⭐ {listing.score:.2f}  ·  {header}"
+    lines = [header]
     if listing.title:
         lines.append(listing.title)
     price = f"€{listing.price:,.0f}" if listing.price else "n/a"

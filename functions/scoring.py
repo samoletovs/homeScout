@@ -12,35 +12,28 @@ from typing import Optional
 
 from models import Listing
 
-# Criteria importance weights (1–5). Tune to taste. Report §C starter model.
+# Criteria importance weights (1–5). Sensible defaults — personalise per user.
+# Only criteria we actually populate today are scored; others arrive with LLM extraction.
 WEIGHTS: dict[str, int] = {
-    "commute": 5,       # minutes to city/work           (cost)
-    "schools": 5,       # kindergarten/school proximity  (benefit)
-    "price_per_m2": 4,  # value normaliser               (cost)
-    "size": 4,          # usable m²                      (benefit)
-    "energy": 3,        # energy class running cost      (cost)
-    "outdoor": 3,       # garden/balcony                 (benefit)
-    "noise": 3,         # aircraft/road noise            (cost)
-    "condition": 3,     # turnkey vs needs-work          (benefit)
-    "parking": 2,       # parking                        (benefit)
-    "resale": 3,        # neighbourhood desirability     (benefit)
+    "value": 5,         # under/over-priced vs area (VZD NĪTIS)   (benefit)
+    "commute": 5,       # minutes to centre/work                 (cost)
+    "schools": 4,       # nearest school/kindergarten            (benefit)
+    "size": 4,          # usable m²                              (benefit)
+    "price_per_m2": 3,  # absolute €/m²                          (cost)
+    "energy": 3,        # energy class running cost              (cost)
 }
 
 # Criteria where a higher raw value is worse (normalisation is inverted).
-COST_CRITERIA = {"commute", "price_per_m2", "energy", "noise"}
+COST_CRITERIA = {"commute", "price_per_m2", "energy"}
 
 # (lo, hi) bounds used to normalise each raw feature to 0..1.
 RANGES: dict[str, tuple[float, float]] = {
+    "value": (0, 1),              # 0 over-priced .. 1 under-priced
     "commute": (5, 60),           # minutes
-    "schools": (0, 1),            # pre-normalised 0..1
-    "price_per_m2": (800, 4000),  # €/m²
+    "schools": (0, 1),            # pre-normalised proximity
     "size": (40, 200),            # m²
+    "price_per_m2": (800, 4000),  # €/m²
     "energy": (1, 7),             # A=1 (best) .. G=7 (worst)
-    "outdoor": (0, 1),
-    "noise": (0, 1),              # 0 quiet .. 1 loud
-    "condition": (0, 1),          # 0 needs work .. 1 turnkey
-    "parking": (0, 1),
-    "resale": (0, 1),
 }
 
 
@@ -113,3 +106,14 @@ def score(features: dict[str, float]) -> tuple[float, dict[str, float]]:
         breakdown[name] = round(contribution, 4)
         acc += contribution
     return round(acc / total_weight, 4), breakdown
+
+
+ENERGY_MAP = {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7}
+
+
+def score_listing(listing: Listing) -> tuple[float, dict[str, float]]:
+    """Score a listing from its enriched features, deriving energy from its class."""
+    feats = dict(listing.features)
+    if "energy" not in feats and listing.energy_class:
+        feats["energy"] = ENERGY_MAP.get(listing.energy_class.strip().upper()[:1])
+    return score(feats)

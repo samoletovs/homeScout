@@ -13,7 +13,7 @@ from config import DB_PATH, ENRICH_CAP, USER_AGENT
 from enrich import enrich_all
 from models import Listing
 from notify import TelegramNotifier
-from scoring import HardFilters, passes_hard_filters
+from scoring import HardFilters, passes_hard_filters, score_listing
 from sources import fetch_all
 from store import Store
 from valuation import value_listing
@@ -54,6 +54,8 @@ async def run_once(*, db_path: str = DB_PATH, notify_results: bool = True) -> li
                 await enrich_all(fresh_listings, client, store, cap=ENRICH_CAP)
                 for listing in fresh_listings:
                     value_listing(listing)
+                    listing.score, _ = score_listing(listing)
+                fresh.sort(key=lambda pair: pair[0].score or 0.0, reverse=True)
                 if notify_results:
                     sent = await TelegramNotifier().send_all(fresh, client)
                     log.info("telegram: sent %d/%d", sent, len(fresh))

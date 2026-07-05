@@ -6,7 +6,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "functions"))
 
 from models import Listing  # noqa: E402
-from scoring import WEIGHTS, HardFilters, passes_hard_filters, score  # noqa: E402
+from scoring import WEIGHTS, HardFilters, passes_hard_filters, score, score_listing  # noqa: E402
 
 
 class ScoreTests(unittest.TestCase):
@@ -43,6 +43,18 @@ class HardFilterTests(unittest.TestCase):
         self.assertFalse(
             passes_hard_filters(Listing(id="1", source="x", url="", flood_risk=True), f)
         )
+
+
+class ScoreListingTests(unittest.TestCase):
+    def test_energy_class_maps_into_score(self):
+        best = Listing(id="1", source="x", url="", energy_class="A")
+        worst = Listing(id="2", source="x", url="", energy_class="G")
+        self.assertGreater(score_listing(best)[0], score_listing(worst)[0])
+
+    def test_value_feature_rewards_underpriced(self):
+        cheap = Listing(id="1", source="x", url="", features={"value": 0.9})
+        dear = Listing(id="2", source="x", url="", features={"value": 0.1})
+        self.assertGreater(score_listing(cheap)[0], score_listing(dear)[0])
 
 
 if __name__ == "__main__":

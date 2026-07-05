@@ -31,6 +31,7 @@ class Listing:
     nearest_school_km: Optional[float] = None
     nearest_kindergarten_km: Optional[float] = None
     valuation: Optional[str] = None
+    score: Optional[float] = None
     features: dict = field(default_factory=dict)
     first_seen: Optional[datetime] = None
 
