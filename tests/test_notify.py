@@ -19,8 +19,8 @@ class FormatTests(unittest.TestCase):
     def test_contains_key_facts(self):
         msg = format_listing(_listing(), "new")
         self.assertIn("€200,000", msg)
-        self.assertIn("2 rooms", msg)
-        self.assertIn("50 m²", msg)
+        self.assertIn("2 комн.", msg)
+        self.assertIn("50 м²", msg)
         self.assertIn("https://ss.lv/x.html", msg)
         self.assertIn("🆕", msg)
 

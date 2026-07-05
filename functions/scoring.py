@@ -18,6 +18,7 @@ from models import Listing
 WEIGHTS: dict[str, int] = {
     "commute": 5,       # city / airport access                  (cost)
     "schools": 5,       # nearest school/kindergarten            (benefit)
+    "condition": 5,     # freshly renovated / new + fitted kitchen (turnkey)  (benefit)
     "size": 4,          # usable m² (space + home office)         (benefit)
     "value": 4,         # under/over-priced vs area (VZD NĪTIS)   (benefit)
     "price_per_m2": 3,  # absolute €/m²                          (cost)
@@ -32,6 +33,7 @@ RANGES: dict[str, tuple[float, float]] = {
     "value": (0, 1),              # 0 over-priced .. 1 under-priced
     "commute": (5, 60),           # minutes
     "schools": (0, 1),            # pre-normalised proximity
+    "condition": (0, 1),          # 0 needs work .. 1 turnkey renovated/new + kitchen
     "size": (40, 200),            # m²
     "price_per_m2": (800, 4000),  # €/m²
     "energy": (1, 7),             # A=1 (best) .. G=7 (worst)
@@ -82,23 +84,59 @@ class HardFilters:
         )
 
 
-# Condition keywords (Latvian + Russian) used to drop listings that aren't move-in-ready.
+# Condition keywords (Latvian + Russian). The family will NOT renovate — they want a freshly
+# renovated or newly built, fully move-in-ready home, ideally with a fitted kitchen.
 _RENTED_KW = (
     "izīrē", "izīrēt", "izīrēts", "īrniek", "сдан", "сдаётся", "в аренд", "аренда",
 )
 _UNFINISHED_KW = (
-    "bez apdares", "без отделки", "черновая отделка", "недостро", "nepabeigt",
-    "nav pabeigt", "būvniecības stadij", "būvniecībā", "gaidāms nodošan", "белая коробка",
+    "nepabeigt", "nav pabeigt", "būvniecības stadij", "būvniecībā", "gaidāms nodošan",
+    "plānots nodot", "nodošana 20", "nodos 20", "строится", "сдача в 20", "сдача дома",
+    "стадия строитель", "на этапе строитель",
+)
+_NEEDS_RENO_KW = (
+    "bez apdares", "без отделки", "черновая отделка", "черновой", "недостро",
+    "требует ремонт", "требуется ремонт", "под ремонт", "нужен ремонт",
+    "renovējams", "jārenovē", "vajadzīgs remont", "nepiecieš remont", "белая коробка",
+    "под чистовую", "предчистов",
+)
+_RENOVATED_KW = (
+    "renovēt", "izremont", "pēc remonta", "atjaunot", "jaunbūv", "jauns projekt",
+    "новостройк", "новый дом", "с ремонтом", "после ремонта", "евроремонт",
+    "сделан ремонт", "качественный ремонт", "капитальный ремонт", "отремонтир",
+    "дизайнерск", "свежий ремонт", "с отделкой", "полная отделка", "готов к заселению",
+    "заезжай и живи", "labs stāvokl", "lielisks stāvokl",
+)
+_KITCHEN_KW = (
+    "virtuves iekārt", "iebūvēta virtuve", "aprīkota virtuve", "кухня", "кухонн",
+    "с кухней", "встроенная кухня", "кухонный гарнитур", "мебель на кухне",
 )
 
 
 def _condition_flags(listing: Listing) -> dict:
-    """Detect not-move-in-ready signals from the listing headline + description text."""
+    """Detect condition signals from the listing headline + description text."""
     text = f"{listing.title} {listing.description}".lower()
     return {
         "rented": any(kw in text for kw in _RENTED_KW),
         "unfinished": any(kw in text for kw in _UNFINISHED_KW),
+        "needs_reno": any(kw in text for kw in _NEEDS_RENO_KW),
+        "renovated": any(kw in text for kw in _RENOVATED_KW),
+        "kitchen": any(kw in text for kw in _KITCHEN_KW),
     }
+
+
+def _condition_score(listing: Listing) -> float:
+    """0..1 turnkey score: renovated/new + fitted kitchen ranks highest."""
+    flags = _condition_flags(listing)
+    if flags["needs_reno"] or flags["unfinished"]:
+        return 0.0
+    if flags["renovated"] and flags["kitchen"]:
+        return 1.0
+    if flags["renovated"]:
+        return 0.85
+    if flags["kitchen"]:
+        return 0.6
+    return 0.4  # condition unstated — shown, but ranked below explicit turnkey homes
 
 
 def _floor_num(floor: Optional[str]) -> Optional[int]:
@@ -133,7 +171,7 @@ def passes_hard_filters(listing: Listing, f: HardFilters) -> bool:
         flags = _condition_flags(listing)
         if f.exclude_rented and flags["rented"]:
             return False
-        if f.require_ready and flags["unfinished"]:
+        if f.require_ready and (flags["unfinished"] or flags["needs_reno"]):
             return False
     return True
 
@@ -172,4 +210,5 @@ def score_listing(listing: Listing) -> tuple[float, dict[str, float]]:
     feats = dict(listing.features)
     if "energy" not in feats and listing.energy_class:
         feats["energy"] = ENERGY_MAP.get(listing.energy_class.strip().upper()[:1])
+    feats["condition"] = _condition_score(listing)
     return score(feats)

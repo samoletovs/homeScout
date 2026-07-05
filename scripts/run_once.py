@@ -86,10 +86,9 @@ async def _preview(top: int, send: bool) -> None:
             print(format_digest(pairs, limit=top))
             if send:
                 notifier = TelegramNotifier()
-                sent = await notifier.send_digest(pairs, client, limit=top)
-                cards = await notifier.send_cards(pairs, client, ADVISE_TOP_N)
+                cards = await notifier.send_cards(pairs, client, top)
                 state = "configured" if notifier.enabled else "not configured — nothing sent"
-                print(f"\n[telegram: digest={sent}, cards={cards}] ({state})")
+                print(f"\n[telegram: cards={cards}] ({state})")
     finally:
         store.close()
 

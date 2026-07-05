@@ -84,12 +84,14 @@ ADVISE_TOP_N = int(os.getenv("HOMESCOUT_ADVISE_TOP", "5"))
 # Concise buyer context for the adviser (no budget, no names). Override with HOMESCOUT_PROFILE.
 FAMILY_PROFILE = os.getenv(
     "HOMESCOUT_PROFILE",
-    "Family of 2 adults + 2 kids (~9 and 11) buying a turnkey home: >=4 rooms plus a "
-    "work-from-home office, parking, outdoor space, not ground floor. Areas by priority: "
-    "Mārupe (near Mārupes ģimnāzija + airport, ~7 km to centre), then central Rīga "
-    "(riverside/Daugava a plus), then Jūrmala (seaside a plus). Values: easy city + airport "
-    "access (a parent travels for work; a child plays football in Rīga), school proximity, "
-    "space, near water, fair price vs the area, newer/efficient. Watching steadily 6-12 months.",
+    "Family of 2 adults + 2 kids (~9 and 11) buying a MOVE-IN-READY home — only freshly "
+    "renovated or newly built, fully turnkey with a fitted/installed kitchen; they will NOT "
+    "renovate themselves, so anything needing renovation, unfinished, or rented is out. "
+    "Requirements: >=4 rooms plus a work-from-home office, parking, outdoor space, not ground "
+    "floor. Areas by priority: Mārupe (near Mārupes ģimnāzija + airport, ~7 km to centre), then "
+    "central Rīga (riverside/Daugava a plus), then Jūrmala (seaside a plus). Values: easy city "
+    "+ airport access (a parent travels for work; a child plays football in Rīga), school "
+    "proximity, space, near water, fair price vs the area, newer/efficient. Watching 6-12 months.",
 )
 
 # Family communication language (stored data stays English). ru = Russian.

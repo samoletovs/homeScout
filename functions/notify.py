@@ -37,9 +37,23 @@ def _ru_plural(n: int, one: str, few: str, many: str) -> str:
     return many
 
 
+_TAGS = {
+    "ru": {"new": "🆕 Новое", "price_drop": "📉 Снижение цены"},
+    "en": {"new": "🆕 New listing", "price_drop": "📉 Price drop"},
+}
+_VAL_RU = {"under": "ниже рынка", "over": "выше рынка", "fair": "по рынку"}
+
+
+def _ru_valuation(valuation: str) -> str:
+    """Render an English valuation string ('under (…)') in Russian for the card."""
+    word, _, rest = valuation.partition(" ")
+    return f"{_VAL_RU.get(word, word)} {rest}".replace("median", "медиана").strip()
+
+
 def format_listing(listing: Listing, reason: str = "new") -> str:
-    """Render a listing as a Telegram message body."""
-    tag = "🆕 New listing" if reason == "new" else "📉 Price drop"
+    """Render a listing as a Telegram message body (Russian when COMM_LANGUAGE='ru')."""
+    ru = COMM_LANGUAGE == "ru"
+    tag = _TAGS.get(COMM_LANGUAGE, _TAGS["en"]).get(reason, reason)
     emoji = _area_emoji(listing.district)
     header = f"{tag} — {emoji} {listing.district or '?'}"
     if listing.score is not None:
@@ -56,24 +70,25 @@ def format_listing(listing: Listing, reason: str = "new") -> str:
     lines.append(f"💶 {price}" + (f"  ·  {ppm2:,.0f} €/m²" if ppm2 else ""))
     if listing.valuation:
         mark = "🟢" if listing.valuation.startswith("under") else "🔴" if listing.valuation.startswith("over") else "⚪"
-        lines.append(f"{mark} {listing.valuation}")
+        val = _ru_valuation(listing.valuation) if ru else listing.valuation
+        lines.append(f"{mark} {val}")
     facts = []
     if listing.rooms:
-        facts.append(f"{listing.rooms} rooms")
+        facts.append(f"{listing.rooms} комн." if ru else f"{listing.rooms} rooms")
     if listing.area_m2:
-        facts.append(f"{listing.area_m2:g} m²")
+        facts.append(f"{listing.area_m2:g} м²" if ru else f"{listing.area_m2:g} m²")
     if listing.floor:
-        facts.append(f"floor {listing.floor}")
+        facts.append(f"этаж {listing.floor}" if ru else f"floor {listing.floor}")
     if listing.energy_class:
-        facts.append(f"energy {listing.energy_class}")
+        facts.append(f"класс {listing.energy_class}" if ru else f"energy {listing.energy_class}")
     if listing.commute_min:
-        facts.append(f"~{listing.commute_min:g} min to centre")
+        facts.append(f"~{listing.commute_min:g} мин до центра" if ru else f"~{listing.commute_min:g} min to centre")
     if listing.nearest_school_km is not None:
-        facts.append(f"school {listing.nearest_school_km:g} km")
+        facts.append(f"школа {listing.nearest_school_km:g} км" if ru else f"school {listing.nearest_school_km:g} km")
     if listing.nearest_kindergarten_km is not None:
-        facts.append(f"kindergarten {listing.nearest_kindergarten_km:g} km")
+        facts.append(f"садик {listing.nearest_kindergarten_km:g} км" if ru else f"kindergarten {listing.nearest_kindergarten_km:g} km")
     if listing.flood_risk:
-        facts.append("⚠️ flood zone")
+        facts.append("⚠️ зона затопления" if ru else "⚠️ flood zone")
     if facts:
         lines.append("  ·  ".join(facts))
     lines.append(f"🔗 {listing.url}")

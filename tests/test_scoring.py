@@ -38,6 +38,20 @@ class HardFilterTests(unittest.TestCase):
         self.assertFalse(passes_hard_filters(Listing(id="1", source="x", url="", rooms=2), f))
         self.assertTrue(passes_hard_filters(Listing(id="2", source="x", url="", rooms=4), f))
 
+    def test_excludes_fixer_upper_accepts_turnkey(self):
+        base = dict(source="ss.lv", url="u", price=200000, area_m2=100, rooms=4)
+        fixer = Listing(id="1", title="Dzīvoklis bez apdares, требует ремонта", **base)
+        turnkey = Listing(id="2", title="Свежий ремонт, встроенная кухня", **base)
+        f = HardFilters()  # defaults: 4 rooms / 75 m², require_ready
+        self.assertFalse(passes_hard_filters(fixer, f))
+        self.assertTrue(passes_hard_filters(turnkey, f))
+
+    def test_turnkey_scores_above_unstated(self):
+        from scoring import _condition_score
+        turnkey = Listing(id="1", source="x", url="u", title="новостройка, встроенная кухня")
+        plain = Listing(id="2", source="x", url="u", title="Dzīvoklis Rīgā")
+        self.assertGreater(_condition_score(turnkey), _condition_score(plain))
+
     def test_rejects_flood_when_excluded(self):
         f = HardFilters(exclude_flood=True)
         self.assertFalse(
