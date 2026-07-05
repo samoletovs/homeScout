@@ -59,3 +59,33 @@ def format_taste_for_adviser(summary: Optional[dict]) -> Optional[str]:
         verb = "liked" if note["sentiment"] > 0 else "disliked" if note["sentiment"] < 0 else "noted"
         parts.append(f"{verb} ({note['area']}): {note['comment']}")
     return " | ".join(parts)
+
+
+async def record(body: dict, db_path: Optional[str] = None) -> dict:
+    """HTTP-facing intake: validate a feedback payload, store it, return the new taste.
+
+    Body: ``{listing_ref, member, sentiment, comment}``. ``sentiment`` may be an int
+    (-1/0/1) or a keyword/emoji ("like" / "👎" / …). Opens its own store, so it is safe to
+    call from the feedback HTTP trigger. Returns ``{ok, taste}`` (taste is the refreshed
+    English summary the adviser will use next run).
+    """
+    from config import DB_PATH, FEEDBACK_MAX_COMMENT
+    from store import Store
+
+    ref = str(body.get("listing_ref") or body.get("url") or "").strip()
+    if not ref:
+        return {"ok": False, "error": "listing_ref required"}
+    member = str(body.get("member") or "family").strip()[:60]
+    raw_sent = body.get("sentiment", 0)
+    sentiment = raw_sent if isinstance(raw_sent, int) else parse_sentiment(str(raw_sent))
+    comment = body.get("comment")
+    if comment:
+        comment = str(comment)[:FEEDBACK_MAX_COMMENT]
+
+    store = Store(db_path or DB_PATH)
+    try:
+        ok = await ingest(store, ref, member, int(sentiment), comment)
+        taste = format_taste_for_adviser(store.taste_summary()) if ok else None
+        return {"ok": ok, "taste": taste}
+    finally:
+        store.close()

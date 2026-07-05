@@ -63,6 +63,8 @@ def format_listing(listing: Listing, reason: str = "new") -> str:
         facts.append("⚠️ flood zone")
     if facts:
         lines.append("  ·  ".join(facts))
+    if listing.adviser:
+        lines.append(f"💬 {listing.adviser}")
     lines.append(f"🔗 {listing.url}")
     lines.append(f"({listing.source})")
     return "\n".join(lines)
@@ -110,6 +112,21 @@ def format_digest(items: list[tuple[Listing, str]], limit: int = 10) -> str:
         extra = len(items) - limit
         blocks.append(f"\n…и ещё {extra}" if COMM_LANGUAGE == "ru" else f"\n…and {extra} more")
     return "\n".join(blocks)
+
+
+def _listing_key(listing: Listing) -> str:
+    """The store key the feedback endpoint resolves (also matches the listing URL)."""
+    return f"{listing.source}:{listing.id}"
+
+
+def feedback_buttons(listing: Listing) -> list[list[dict]]:
+    """👍/👎 inline keyboard for a card. Callback 'hs:<sentiment>:<key>' → agentMode gate."""
+    key = _listing_key(listing)
+    like, dislike = ("👍 Нравится", "👎 Не то") if COMM_LANGUAGE == "ru" else ("👍 Like", "👎 Not it")
+    return [[
+        {"text": like, "callback_data": f"hs:1:{key}"},
+        {"text": dislike, "callback_data": f"hs:-1:{key}"},
+    ]]
 
 
 class TelegramNotifier:
@@ -168,3 +185,36 @@ class TelegramNotifier:
         except Exception:
             log.exception("telegram digest send failed")
             return 0
+
+    async def send_cards(
+        self, items: list[tuple[Listing, str]], client: "httpx.AsyncClient", top_n: int = 5
+    ) -> int:
+        """Send the top-N listings as individual cards with 👍/👎 buttons.
+
+        Each card is one listing, so a family member can react to exactly that property —
+        tap a button, or reply to the card with text/voice (handled by the agentMode gate).
+        Returns the number of cards sent.
+        """
+        ranked = sorted(items, key=lambda pair: pair[0].score or 0.0, reverse=True)[:top_n]
+        if not ranked:
+            return 0
+        if not self.enabled:
+            log.info("Telegram not configured — %d card(s) would be sent", len(ranked))
+            return 0
+        sent = 0
+        for listing, reason in ranked:
+            try:
+                resp = await client.post(
+                    f"https://api.telegram.org/bot{self.token}/sendMessage",
+                    json={
+                        "chat_id": self.chat_id,
+                        "text": format_listing(listing, reason),
+                        "disable_web_page_preview": True,
+                        "reply_markup": {"inline_keyboard": feedback_buttons(listing)},
+                    },
+                )
+                resp.raise_for_status()
+                sent += 1
+            except Exception:
+                log.exception("telegram card send failed")
+        return sent

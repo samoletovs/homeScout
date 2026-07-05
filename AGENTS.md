@@ -27,8 +27,13 @@ advanced adviser and supersedes the old skill once trusted.
 - **Language:** the family communicates in **Russian**; stored data stays **English**. The
   adviser writes its take in `COMM_LANGUAGE` (ru); inbound comments are translated to English
   (`translate.to_english`) before storage.
-- **agentMode gate (planned):** agentMode captures a Telegram reply (text or transcribed
-  voice) to a brief, maps 👍/👎 or infers sentiment, and calls `feedback.ingest`.
+- **agentMode gate (wired):** homeScout exposes `POST /api/feedback` (function-key
+  protected) and sends the top listings as individual **cards with 👍/👎 buttons**. In
+  agentMode, `shared/homescout.py` captures a button tap or a text/voice **reply to a card**,
+  infers sentiment (ru/en/lv/emoji), and POSTs to the endpoint → `feedback.record` →
+  `ingest`. Enable it by setting `HOMESCOUT_FEEDBACK_URL` (URL incl. `?code=`) in agentMode;
+  unset, the gate is inert. The endpoint's SQLite lives on the persistent Azure `HOME` share
+  so feedback survives restarts and is shared with the daily timer.
 
 ## Build / test / verify
 

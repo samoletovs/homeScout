@@ -15,3 +15,28 @@ async def poll_listings(timer: func.TimerRequest) -> None:
         logging.warning("timer past due — running anyway")
     fresh = await run_once(notify_results=True)
     logging.info("homeScout: %d new/changed listing(s) this run", len(fresh))
+
+
+# Family feedback intake — the agentMode Telegram gate POSTs 👍/👎 + comments here.
+# Comments arrive in the family's language; homeScout translates them to English for
+# storage and folds them into the learned taste that steers the adviser. Function-key
+# protected: the gate holds the URL (incl. ?code=) as a secret.
+@app.route(route="feedback", methods=["POST"], auth_level=func.AuthLevel.FUNCTION)
+async def feedback_intake(req: func.HttpRequest) -> func.HttpResponse:
+    import json
+
+    from feedback import record
+
+    try:
+        body = req.get_json()
+    except ValueError:
+        return func.HttpResponse(
+            '{"ok": false, "error": "invalid json"}',
+            mimetype="application/json", status_code=400,
+        )
+    result = await record(body)
+    return func.HttpResponse(
+        json.dumps(result, ensure_ascii=False),
+        mimetype="application/json",
+        status_code=200 if result.get("ok") else 400,
+    )

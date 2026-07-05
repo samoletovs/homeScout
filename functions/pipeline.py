@@ -67,8 +67,14 @@ async def run_once(*, db_path: str = DB_PATH, notify_results: bool = True) -> li
                 for listing, _ in fresh:  # persist the knowledge (score/valuation/adviser)
                     store.save_evaluation(listing, bucket_for(listing))
                 if notify_results:
-                    sent = await TelegramNotifier().send_digest(fresh, client)
-                    log.info("telegram digest sent=%d listings=%d", sent, len(fresh))
+                    notifier = TelegramNotifier()
+                    sent = await notifier.send_digest(fresh, client)
+                    # Top-N as individual cards with 👍/👎 buttons so the family can react
+                    # per listing (tap, or reply with text/voice — the agentMode gate).
+                    cards = await notifier.send_cards(fresh, client, ADVISE_TOP_N)
+                    log.info(
+                        "telegram digest sent=%d cards=%d listings=%d", sent, cards, len(fresh)
+                    )
         return fresh
     finally:
         store.close()

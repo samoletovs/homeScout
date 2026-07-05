@@ -6,7 +6,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "functions"))
 
 from models import Listing  # noqa: E402
-from notify import TelegramNotifier, format_digest, format_listing  # noqa: E402
+from notify import TelegramNotifier, feedback_buttons, format_digest, format_listing  # noqa: E402
 
 
 def _listing() -> Listing:
@@ -34,6 +34,18 @@ class NotifierTests(unittest.TestCase):
 
     def test_enabled_with_credentials(self):
         self.assertTrue(TelegramNotifier(token="t", chat_id="c").enabled)
+
+
+class CardTests(unittest.TestCase):
+    def test_feedback_buttons_encode_key(self):
+        datas = [b["callback_data"] for row in feedback_buttons(_listing()) for b in row]
+        self.assertIn("hs:1:ss.lv:1", datas)
+        self.assertIn("hs:-1:ss.lv:1", datas)
+
+    def test_listing_shows_adviser_take(self):
+        lst = _listing()
+        lst.adviser = "Great fit near the school."
+        self.assertIn("💬 Great fit near the school.", format_listing(lst, "new"))
 
 
 class DigestTests(unittest.TestCase):

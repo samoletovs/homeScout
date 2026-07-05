@@ -22,9 +22,22 @@ CITY24_URL = (
 )
 CITY24_TARGET_AREAS = {"Rīga", "Jūrmala", "Mārupe", "Mārupes novads"}
 
-# Dedup/state DB (git-ignored). Durable on a home machine; ephemeral on Functions
-# consumption plan — move to Cosmos DB for durable cloud state (see AGENTS.md).
-DB_PATH = os.getenv("HOMESCOUT_DB", "data/homescout.sqlite")
+# Dedup/state + knowledge DB (git-ignored). On Azure Functions we place it under the
+# persistent, cross-instance HOME share (Azure Files) so scored judgments and family
+# feedback survive restarts and are shared between the daily timer and the feedback
+# endpoint. Locally it lives under ./data. Override with HOMESCOUT_DB. (Cosmos DB is the
+# future upgrade for higher write volume — see AGENTS.md.)
+def _default_db() -> str:
+    home = os.getenv("HOME")
+    if home and os.getenv("WEBSITE_INSTANCE_ID"):  # running on Azure Functions
+        return os.path.join(home, "data", "homescout.sqlite")
+    return "data/homescout.sqlite"
+
+
+DB_PATH = os.getenv("HOMESCOUT_DB", _default_db())
+
+# Feedback intake (agentMode Telegram gate → /api/feedback). Comment length is capped.
+FEEDBACK_MAX_COMMENT = int(os.getenv("HOMESCOUT_FEEDBACK_MAX_COMMENT", "500"))
 
 
 # ── Enrichment (Phase 2) ─────────────────────────────────────────────────

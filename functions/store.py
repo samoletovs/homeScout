@@ -37,7 +37,9 @@ class Store:
     def __init__(self, path: str = ":memory:") -> None:
         if path not in (":memory:", ""):
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        self.conn = sqlite3.connect(path)
+        # timeout: the daily timer and the feedback endpoint may touch the shared DB
+        # concurrently on Azure Files — wait rather than fail on a transient lock.
+        self.conn = sqlite3.connect(path, timeout=30)
         self.conn.executescript(_SCHEMA)
         self._migrate()
 

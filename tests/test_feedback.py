@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "functions"))
 
-from feedback import format_taste_for_adviser, ingest, parse_sentiment  # noqa: E402
+from feedback import format_taste_for_adviser, ingest, parse_sentiment, record  # noqa: E402
 from models import Listing  # noqa: E402
 from store import Store  # noqa: E402
 
@@ -49,6 +49,33 @@ class TasteFormatTests(unittest.TestCase):
     def test_empty_is_none(self):
         empty = {"liked": 0, "disliked": 0, "by_area": {}, "recent": []}
         self.assertIsNone(format_taste_for_adviser(empty))
+
+
+class RecordTests(unittest.TestCase):
+    def test_record_stores_and_returns_taste(self):
+        import shutil
+        import tempfile
+
+        tmpdir = tempfile.mkdtemp()
+        tmp = os.path.join(tmpdir, "hs.sqlite")
+        try:
+            seed = Store(tmp)
+            seed.filter_new([Listing(id="1", source="city24", url="https://city24.lv/1",
+                                     price=190000, area_m2=78, rooms=3, district="Mārupe")])
+            seed.close()
+            res = _run(record(
+                {"listing_ref": "https://city24.lv/1", "member": "mama",
+                 "sentiment": "like", "comment": "нравится"},
+                db_path=tmp,
+            ))
+            self.assertTrue(res["ok"])
+            self.assertIn("1 liked", res["taste"])
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_record_requires_ref(self):
+        res = _run(record({"member": "papa", "sentiment": 1}))
+        self.assertFalse(res["ok"])
 
 
 if __name__ == "__main__":
