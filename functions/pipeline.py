@@ -11,14 +11,14 @@ import httpx
 
 from adviser import advise
 from adviser import enabled as adviser_enabled
-from config import ADVISE_TOP_N, DB_PATH, ENRICH_CAP, USER_AGENT
+from config import ADVISE_TOP_N, ENRICH_CAP, USER_AGENT
 from enrich import enrich_all
 from feedback import format_taste_for_adviser
 from models import Listing
 from notify import TelegramNotifier
 from scoring import HardFilters, passes_hard_filters, score_listing
 from sources import fetch_all
-from store import Store
+from store import open_store
 from valuation import bucket_for, value_listing
 
 log = logging.getLogger("homescout.pipeline")
@@ -35,14 +35,14 @@ def _dedupe(listings: list[Listing]) -> list[Listing]:
     return unique
 
 
-async def run_once(*, db_path: str = DB_PATH, notify_results: bool = True) -> list[tuple[Listing, str]]:
+async def run_once(*, db_path: str | None = None, notify_results: bool = True) -> list[tuple[Listing, str]]:
     """Fetch, dedupe, persist, and return alertable (listing, reason) pairs.
 
     On the first run against an empty store, listings are seeded silently (no alert
     flood); later runs alert only genuinely new or price-dropped listings.
     """
     filters = HardFilters.from_env()
-    store = Store(db_path)
+    store = open_store(db_path)
     try:
         seeding = store.is_empty()
         async with httpx.AsyncClient(timeout=25.0, headers={"User-Agent": USER_AGENT}) as client:

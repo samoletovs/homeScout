@@ -69,8 +69,8 @@ async def record(body: dict, db_path: Optional[str] = None) -> dict:
     call from the feedback HTTP trigger. Returns ``{ok, taste}`` (taste is the refreshed
     English summary the adviser will use next run).
     """
-    from config import DB_PATH, FEEDBACK_MAX_COMMENT
-    from store import Store
+    from config import FEEDBACK_MAX_COMMENT
+    from store import open_store
 
     ref = str(body.get("listing_ref") or body.get("url") or "").strip()
     if not ref:
@@ -82,7 +82,7 @@ async def record(body: dict, db_path: Optional[str] = None) -> dict:
     if comment:
         comment = str(comment)[:FEEDBACK_MAX_COMMENT]
 
-    store = Store(db_path or DB_PATH)
+    store = open_store(db_path)
     try:
         ok = await ingest(store, ref, member, int(sentiment), comment)
         taste = format_taste_for_adviser(store.taste_summary()) if ok else None

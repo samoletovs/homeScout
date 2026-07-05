@@ -166,3 +166,19 @@ class Store:
                     fresh.append((lst, "price_drop"))
         self.conn.commit()
         return fresh
+
+
+def open_store(db_path: Optional[str] = None):
+    """Return the durable store for the current environment.
+
+    Cosmos DB when ``COSMOS_ENDPOINT`` is set and no explicit path is given (production);
+    SQLite otherwise. Passing an explicit ``db_path`` always selects SQLite — used by local
+    dev, the ``--preview`` runner, and tests.
+    """
+    if db_path is None and os.getenv("COSMOS_ENDPOINT"):
+        from cosmos_store import CosmosStore
+
+        return CosmosStore()
+    from config import DB_PATH
+
+    return Store(db_path or DB_PATH)

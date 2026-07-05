@@ -53,5 +53,26 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(self.store.area_stats("Mārupe")["count"], 0)
 
 
+class OpenStoreTests(unittest.TestCase):
+    def test_explicit_path_always_sqlite(self):
+        # An explicit db_path must win over COSMOS_ENDPOINT (used by preview + tests).
+        from store import open_store
+        os.environ["COSMOS_ENDPOINT"] = "https://example.documents.azure.com:443/"
+        try:
+            store = open_store(":memory:")
+            self.assertIsInstance(store, Store)
+            store.close()
+        finally:
+            os.environ.pop("COSMOS_ENDPOINT", None)
+
+
+class CosmosHelperTests(unittest.TestCase):
+    def test_geo_id_is_stable_and_id_safe(self):
+        from cosmos_store import _geo_id  # importable without the azure-cosmos package
+        self.assertEqual(_geo_id("Mārupe, Latvija"), _geo_id("Mārupe, Latvija"))
+        self.assertNotEqual(_geo_id("Rīga"), _geo_id("Jūrmala"))
+        self.assertNotIn("/", _geo_id("a/b#c?d"))
+
+
 if __name__ == "__main__":
     unittest.main()
