@@ -14,7 +14,15 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("homescout.notify")
 
-_AREA_EMOJI = {"Rīga": "🏙️", "Jūrmala": "🏖️", "Mārupe": "🏡"}
+_AREA_EMOJI = {"rīga": "🏙️", "jūrmala": "🏖️", "mārup": "🏡"}
+
+
+def _area_emoji(district: Optional[str]) -> str:
+    d = (district or "").lower()
+    for key, emoji in _AREA_EMOJI.items():
+        if key in d:
+            return emoji
+    return "📍"
 
 
 def _ru_plural(n: int, one: str, few: str, many: str) -> str:
@@ -32,12 +40,16 @@ def _ru_plural(n: int, one: str, few: str, many: str) -> str:
 def format_listing(listing: Listing, reason: str = "new") -> str:
     """Render a listing as a Telegram message body."""
     tag = "🆕 New listing" if reason == "new" else "📉 Price drop"
-    emoji = _AREA_EMOJI.get(listing.district or "", "📍")
+    emoji = _area_emoji(listing.district)
     header = f"{tag} — {emoji} {listing.district or '?'}"
     if listing.score is not None:
         header = f"⭐ {listing.score:.2f}  ·  {header}"
     lines = [header]
-    if listing.title:
+    # The Russian adviser take is the human-readable description + judgment; fall back to
+    # the raw (often Latvian) seller headline only when no take was generated.
+    if listing.adviser:
+        lines.append(f"💬 {listing.adviser}")
+    elif listing.title:
         lines.append(listing.title)
     price = f"€{listing.price:,.0f}" if listing.price else "n/a"
     ppm2 = listing.price_per_m2
@@ -64,8 +76,6 @@ def format_listing(listing: Listing, reason: str = "new") -> str:
         facts.append("⚠️ flood zone")
     if facts:
         lines.append("  ·  ".join(facts))
-    if listing.adviser:
-        lines.append(f"💬 {listing.adviser}")
     lines.append(f"🔗 {listing.url}")
     lines.append(f"({listing.source})")
     return "\n".join(lines)
@@ -82,7 +92,7 @@ def format_digest(items: list[tuple[Listing, str]], limit: int = 10) -> str:
     blocks = [header]
     for listing, reason in ranked[:limit]:
         star = f"⭐{listing.score:.2f} " if listing.score is not None else ""
-        emoji = _AREA_EMOJI.get(listing.district or "", "📍")
+        emoji = _area_emoji(listing.district)
         price = f"€{listing.price:,.0f}" if listing.price else "n/a"
         ppm2 = listing.price_per_m2
         facts = []

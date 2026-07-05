@@ -40,6 +40,7 @@ def build_messages(
         f"nearest school {listing.nearest_school_km:g} km" if listing.nearest_school_km is not None else "",
         f"valuation: {listing.valuation}" if listing.valuation else "",
         f"type: {listing.property_type}",
+        f'seller headline: "{listing.title}"' if listing.title else "",
     ]
     context = "; ".join(f for f in facts if f)
     if stats and stats.get("count"):
@@ -47,8 +48,11 @@ def build_messages(
         context += f", averaging {stats['avg_ppm2']:,.0f} €/m²." if stats.get("avg_ppm2") else "."
     system = (
         "You are a sharp, friendly Latvian property buyer's agent advising one specific family. "
-        "Be honest and concrete — no marketing language, no fluff. In 2-3 short sentences: whether "
-        "it fits them and why, the single biggest plus, and the main thing to check or negotiate. "
+        "Be honest and concrete — no marketing language, no fluff. First, if the listing clearly "
+        "misses a must-have (fewer than 4 rooms, too small, not move-in-ready / rented / "
+        "unfinished, or outside Mārupe / Rīga centre / Jūrmala), say that plainly. Otherwise, in "
+        "2-3 short sentences: whether it fits them and why, the single biggest plus, and the main "
+        "thing to check or negotiate. "
         f"Write your reply in {LANG_NAMES.get(lang, 'Russian')}.\n\n"
         f"The family: {FAMILY_PROFILE}"
     )

@@ -42,30 +42,63 @@ RANGES: dict[str, tuple[float, float]] = {
 class HardFilters:
     """Binary deal-breakers applied before scoring.
 
-    No real figures are baked in — values come from the environment so a personal
-    budget never lives in the repo.
+    Size/room floors have sensible defaults for this family (big, move-in-ready home);
+    price bounds stay env-only so no budget figure lives in the repo.
     """
 
     max_price: Optional[float] = None
-    min_rooms: Optional[int] = None
+    min_price: Optional[float] = None
+    min_rooms: Optional[int] = 4
+    min_area: Optional[float] = 75.0
     max_commute_min: Optional[float] = None
     exclude_flood: bool = True
     exclude_ground_floor: bool = False
+    exclude_rented: bool = True
+    require_ready: bool = True
 
     @classmethod
     def from_env(cls) -> "HardFilters":
-        def _num(key: str) -> Optional[float]:
+        def _num(key: str, default: Optional[float] = None) -> Optional[float]:
             raw = os.getenv(key)
-            return float(raw) if raw else None
+            return float(raw) if raw else default
 
-        rooms = os.getenv("HOMESCOUT_MIN_ROOMS")
+        def _int(key: str, default: Optional[int] = None) -> Optional[int]:
+            raw = os.getenv(key)
+            return int(raw) if raw else default
+
+        def _bool(key: str, default: bool) -> bool:
+            return os.getenv(key, "1" if default else "0") != "0"
+
         return cls(
             max_price=_num("HOMESCOUT_MAX_PRICE"),
-            min_rooms=int(rooms) if rooms else None,
+            min_price=_num("HOMESCOUT_MIN_PRICE"),
+            min_rooms=_int("HOMESCOUT_MIN_ROOMS", 4),
+            min_area=_num("HOMESCOUT_MIN_AREA", 75.0),
             max_commute_min=_num("HOMESCOUT_MAX_COMMUTE"),
-            exclude_flood=os.getenv("HOMESCOUT_EXCLUDE_FLOOD", "1") != "0",
-            exclude_ground_floor=os.getenv("HOMESCOUT_EXCLUDE_GROUND", "0") != "0",
+            exclude_flood=_bool("HOMESCOUT_EXCLUDE_FLOOD", True),
+            exclude_ground_floor=_bool("HOMESCOUT_EXCLUDE_GROUND", False),
+            exclude_rented=_bool("HOMESCOUT_EXCLUDE_RENTED", True),
+            require_ready=_bool("HOMESCOUT_REQUIRE_READY", True),
         )
+
+
+# Condition keywords (Latvian + Russian) used to drop listings that aren't move-in-ready.
+_RENTED_KW = (
+    "izīrē", "izīrēt", "izīrēts", "īrniek", "сдан", "сдаётся", "в аренд", "аренда",
+)
+_UNFINISHED_KW = (
+    "bez apdares", "без отделки", "черновая отделка", "недостро", "nepabeigt",
+    "nav pabeigt", "būvniecības stadij", "būvniecībā", "gaidāms nodošan", "белая коробка",
+)
+
+
+def _condition_flags(listing: Listing) -> dict:
+    """Detect not-move-in-ready signals from the listing headline + description text."""
+    text = f"{listing.title} {listing.description}".lower()
+    return {
+        "rented": any(kw in text for kw in _RENTED_KW),
+        "unfinished": any(kw in text for kw in _UNFINISHED_KW),
+    }
 
 
 def _floor_num(floor: Optional[str]) -> Optional[int]:
@@ -80,7 +113,11 @@ def passes_hard_filters(listing: Listing, f: HardFilters) -> bool:
     """True if the listing clears every configured deal-breaker."""
     if f.max_price is not None and listing.price is not None and listing.price > f.max_price:
         return False
+    if f.min_price is not None and listing.price is not None and listing.price < f.min_price:
+        return False
     if f.min_rooms is not None and listing.rooms is not None and listing.rooms < f.min_rooms:
+        return False
+    if f.min_area is not None and listing.area_m2 is not None and listing.area_m2 < f.min_area:
         return False
     if (
         f.max_commute_min is not None
@@ -92,6 +129,12 @@ def passes_hard_filters(listing: Listing, f: HardFilters) -> bool:
         return False
     if f.exclude_ground_floor and _floor_num(listing.floor) == 1:
         return False
+    if f.exclude_rented or f.require_ready:
+        flags = _condition_flags(listing)
+        if f.exclude_rented and flags["rented"]:
+            return False
+        if f.require_ready and flags["unfinished"]:
+            return False
     return True
 
 

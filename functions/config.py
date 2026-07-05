@@ -7,20 +7,27 @@ USER_AGENT = "Mozilla/5.0 homeScout/0.1 (+https://github.com/samoletovs/homeScou
 
 _SS = "https://www.ss.lv/lv/real-estate"
 
-# ss.lv sale RSS feeds (URL, area label). The '/sell/' segment excludes rentals.
+# ss.lv sale RSS feeds (URL, area label, kind). '/sell/' excludes rentals. Rīga is
+# restricted to the CENTRE (centre + Vecrīga) — the family only wants Rīga centre, Mārupe,
+# or Jūrmala, not the wider city (Sarkandaugava, Bolderāja, Pļavnieki… are excluded).
 SSLV_FEEDS: list[tuple[str, str, str]] = [
-    (f"{_SS}/flats/riga/sell/rss/", "Rīga", "apartment"),
+    (f"{_SS}/flats/riga/centre/sell/rss/", "Rīga, centrs", "apartment"),
+    (f"{_SS}/flats/riga/vecriga/sell/rss/", "Vecrīga", "apartment"),
     (f"{_SS}/flats/jurmala/sell/rss/", "Jūrmala", "apartment"),
     (f"{_SS}/flats/riga-region/marupes-pag/marupe/sell/rss/", "Mārupe", "apartment"),
     (f"{_SS}/homes-summer-residences/riga-region/marupes-pag/marupe/sell/rss/", "Mārupe", "house"),
 ]
 
-# city24 sale apartments (Latvia-wide); filtered client-side to the target areas.
+# city24 sale apartments (Latvia-wide); kept only for these DISTRICT-level areas so wider
+# Rīga suburbs are excluded (the family wants Rīga centre only).
 CITY24_URL = (
     "https://api.city24.ee/lv_LV/search/realties"
     "?tsType=sale&unitType=Apartment&itemsPerPage=100"
 )
-CITY24_TARGET_AREAS = {"Rīga", "Jūrmala", "Mārupe", "Mārupes novads"}
+CITY24_TARGET_AREAS = {
+    "Centrs", "Vecrīga", "Klusais centrs", "Rīgas centrs",
+    "Jūrmala", "Mārupe", "Mārupes novads", "Mārupes pagasts",
+}
 
 # Dedup/state + knowledge DB (git-ignored). DURABILITY NOTE: serverless Functions plans do
 # NOT persist local disk (Flex Consumption = 0 GB persisted; Linux Consumption is retired).
