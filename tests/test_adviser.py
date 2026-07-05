@@ -34,10 +34,10 @@ class AdviserPromptTests(unittest.TestCase):
 
     def test_messages_include_taste_and_language(self):
         msgs = build_messages(_listing(), None, taste="1 liked, 0 disliked | Mārupe +1/-0", lang="ru")
-        system = msgs[0]["content"]
-        self.assertIn("Russian", system)
-        self.assertIn("Learned family preferences", system)
-        self.assertIn("Mārupe +1", system)
+        joined = msgs[0]["content"] + msgs[1]["content"]
+        self.assertIn("Russian", joined)
+        self.assertIn("Learned family preferences", msgs[0]["content"])
+        self.assertIn("Mārupe +1", msgs[0]["content"])
 
     def test_enabled_is_bool(self):
         self.assertIsInstance(enabled(), bool)

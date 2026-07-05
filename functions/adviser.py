@@ -46,21 +46,27 @@ def build_messages(
     if stats and stats.get("count"):
         context += f"\nMarket context: we've tracked {stats['count']} listings in this area"
         context += f", averaging {stats['avg_ppm2']:,.0f} €/m²." if stats.get("avg_ppm2") else "."
+    lang_name = LANG_NAMES.get(lang, "Russian")
     system = (
-        "You are a sharp, friendly Latvian property buyer's agent advising one specific family. "
-        "Be honest and concrete — no marketing language, no fluff. First, if the listing clearly "
-        "misses a must-have (fewer than 4 rooms, too small, not move-in-ready / rented / "
-        "unfinished, or outside Mārupe / Rīga centre / Jūrmala), say that plainly. Otherwise, in "
-        "2-3 short sentences: whether it fits them and why, the single biggest plus, and the main "
-        "thing to check or negotiate. "
-        f"Write your reply in {LANG_NAMES.get(lang, 'Russian')}.\n\n"
+        "You are a sharp, friendly Latvian property buyer's agent advising ONE specific family. "
+        "Be honest and concrete — no marketing fluff. The family's must-haves: at least 4 rooms "
+        "(4 is fine, more is better), at least ~75 m², move-in-ready (not rented, not unfinished), "
+        "in Mārupe, Rīga centre, or Jūrmala. Both apartments and houses are acceptable — never "
+        "criticise a listing merely for being an apartment or for having exactly 4 rooms. "
+        "If it genuinely misses a must-have (fewer than 4 rooms, clearly too small, rented / "
+        "unfinished, or outside those three areas), say so plainly first. Otherwise give a "
+        "positive, useful read: whether it fits and why, the biggest plus, and the main thing to "
+        "check or negotiate.\n\n"
         f"The family: {FAMILY_PROFILE}"
     )
     if taste:
         system += f"\n\nLearned family preferences (weigh these): {taste}"
     return [
         {"role": "system", "content": system},
-        {"role": "user", "content": f"Listing:\n{context}\n\nYour take:"},
+        {"role": "user", "content": (
+            f"Listing:\n{context}\n\nWrite your take in 2-3 short sentences, ONLY in {lang_name} "
+            f"(do not answer in Latvian or English):"
+        )},
     ]
 
 
