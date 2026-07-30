@@ -8,7 +8,7 @@ family criteria, and pushes a ranked shortlist to Telegram.
 
 > Lab experiment under [NauroLabs](https://naurolabs.com). Grew out of agentMode's
 > `property_search` skill. Design + rationale: mindVault dig report
-> `02_areas/agents/research/2026-07-04-ai-property-hunt-system-latvia.md`.
+> `areas/agents/research/2026-07-04-ai-property-hunt-system-latvia.md`.
 
 ## Why
 
@@ -58,7 +58,7 @@ does a real fetch and seeds the dedup store on first run.
 
 The **engine** lives here. **Personal data never does** — budget, shortlisted addresses,
 offers and mortgage figures stay in the OneDrive `.me` vault
-(`01_projects/2026-marupe-apartment-purchase/`). Runtime secrets go in
+(`projects/2026-marupe-apartment-purchase/`). Runtime secrets go in
 `functions/local.settings.json` / SWA App Settings (both git-ignored), never in the repo.
 
 ## Status
