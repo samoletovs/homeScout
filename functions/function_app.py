@@ -7,6 +7,11 @@ from pipeline import run_once
 
 app = func.FunctionApp()
 
+# httpx logs the full request URL at INFO, and the Telegram API carries the bot token in
+# the path — which writes the live token into Application Insights, where it is retained.
+# No request detail here is worth a leaked credential.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 
 # Daily at 12:00 UTC — one "daily brief" digest of the day's new matches.
 @app.timer_trigger(schedule="0 0 12 * * *", arg_name="timer", run_on_startup=False)
