@@ -155,6 +155,10 @@ def feedback_buttons(listing: Listing) -> list[list[dict]]:
     ]]
 
 
+class TelegramError(RuntimeError):
+    """A Telegram call failed, described without the token-bearing URL."""
+
+
 class TelegramNotifier:
     """Sends alert messages to a Telegram chat. No-ops (logs) if unconfigured."""
 
@@ -165,6 +169,28 @@ class TelegramNotifier:
     @property
     def enabled(self) -> bool:
         return bool(self.token and self.chat_id)
+
+    async def _send(self, client: "httpx.AsyncClient", payload: dict) -> None:
+        """POST sendMessage, raising an error that cannot carry the token.
+
+        httpx repeats the request URL in its exception text and the bot token sits in that
+        path, so logging the raw error wrote the live credential into Application Insights.
+        The error is raised outside the handler so no __context__ chain back to the httpx
+        exception is recorded either - `raise ... from None` would leave that reachable.
+        """
+        import httpx  # local: keeps the module importable where httpx is absent
+
+        detail: object = None
+        try:
+            resp = await client.post(
+                f"https://api.telegram.org/bot{self.token}/sendMessage", json=payload
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            detail = status if status is not None else type(exc).__name__
+        if detail is not None:
+            raise TelegramError(f"sendMessage failed: {detail}")
 
     async def send_all(
         self, items: list[tuple[Listing, str]], client: "httpx.AsyncClient", cap: int = 12
@@ -178,11 +204,10 @@ class TelegramNotifier:
         sent = 0
         for listing, reason in items[:cap]:
             try:
-                resp = await client.post(
-                    f"https://api.telegram.org/bot{self.token}/sendMessage",
-                    json={"chat_id": self.chat_id, "text": format_listing(listing, reason)},
+                await self._send(
+                    client,
+                    {"chat_id": self.chat_id, "text": format_listing(listing, reason)},
                 )
-                resp.raise_for_status()
                 sent += 1
             except Exception:
                 log.exception("telegram send failed")
@@ -202,11 +227,10 @@ class TelegramNotifier:
             log.info("DIGEST: %s", text.replace("\n", " | "))
             return 0
         try:
-            resp = await client.post(
-                f"https://api.telegram.org/bot{self.token}/sendMessage",
-                json={"chat_id": self.chat_id, "text": text, "disable_web_page_preview": True},
+            await self._send(
+                client,
+                {"chat_id": self.chat_id, "text": text, "disable_web_page_preview": True},
             )
-            resp.raise_for_status()
             return 1
         except Exception:
             log.exception("telegram digest send failed")
@@ -233,18 +257,16 @@ class TelegramNotifier:
             # Telegram throttles bursts to one chat (~1 msg/s) — pace the cards.
             await asyncio.sleep(pause_s)
             try:
-                resp = await client.post(
-                    f"https://api.telegram.org/bot{self.token}/sendMessage",
-                    json={
+                await self._send(
+                    client,
+                    {
                         "chat_id": self.chat_id,
                         "text": format_listing(listing, reason),
                         "disable_web_page_preview": True,
                         "reply_markup": {"inline_keyboard": feedback_buttons(listing)},
                     },
                 )
-                resp.raise_for_status()
                 sent += 1
             except Exception as exc:
-                body = getattr(getattr(exc, "response", None), "text", "")
-                log.warning("telegram card send failed: %s %s", exc, body[:200])
+                log.warning("telegram card send failed: %s", exc)
         return sent
