@@ -159,16 +159,35 @@ class TelegramError(RuntimeError):
     """A Telegram call failed, described without the token-bearing URL."""
 
 
+def _parse_chat_ids(raw: Optional[str]) -> list[str]:
+    """Split a comma/space-separated chat id setting into individual chats."""
+    if not raw:
+        return []
+    return [part.strip() for part in raw.replace(";", ",").split(",") if part.strip()]
+
+
 class TelegramNotifier:
-    """Sends alert messages to a Telegram chat. No-ops (logs) if unconfigured."""
+    """Sends alert messages to every configured Telegram chat. No-ops (logs) if unconfigured.
+
+    ``TELEGRAM_CHAT_ID`` accepts a comma-separated list so the whole family sees a
+    listing. A bot can only write to a chat that already exists, so each member's own
+    chat id has to be listed (the same ids agentMode keeps in TELEGRAM_ALLOWED_USERS);
+    a single group chat id works just as well.
+    """
 
     def __init__(self, token: Optional[str] = None, chat_id: Optional[str] = None) -> None:
         self.token = token if token is not None else os.getenv("TELEGRAM_BOT_TOKEN")
-        self.chat_id = chat_id if chat_id is not None else os.getenv("TELEGRAM_CHAT_ID")
+        raw = chat_id if chat_id is not None else os.getenv("TELEGRAM_CHAT_ID")
+        self.chat_ids = _parse_chat_ids(raw)
+
+    @property
+    def chat_id(self) -> Optional[str]:
+        """First configured chat — kept for callers that only need one."""
+        return self.chat_ids[0] if self.chat_ids else None
 
     @property
     def enabled(self) -> bool:
-        return bool(self.token and self.chat_id)
+        return bool(self.token and self.chat_ids)
 
     async def _send(self, client: "httpx.AsyncClient", payload: dict) -> None:
         """POST sendMessage, raising an error that cannot carry the token.
@@ -192,10 +211,24 @@ class TelegramNotifier:
         if detail is not None:
             raise TelegramError(f"sendMessage failed: {detail}")
 
+    async def _broadcast(self, client: "httpx.AsyncClient", payload: dict) -> int:
+        """Send one payload to every configured chat. Returns chats delivered to.
+
+        One member's blocked chat must not stop the rest of the family being told.
+        """
+        delivered = 0
+        for chat_id in self.chat_ids:
+            try:
+                await self._send(client, {**payload, "chat_id": chat_id})
+                delivered += 1
+            except Exception as exc:
+                log.warning("telegram send to chat failed: %s", exc)
+        return delivered
+
     async def send_all(
         self, items: list[tuple[Listing, str]], client: "httpx.AsyncClient", cap: int = 12
     ) -> int:
-        """Send up to `cap` alerts. Returns the number actually sent."""
+        """Send up to `cap` alerts to every configured chat. Returns the number sent."""
         if not self.enabled:
             log.warning("Telegram not configured — %d alert(s) would be sent", len(items))
             for listing, reason in items[:cap]:
@@ -203,14 +236,7 @@ class TelegramNotifier:
             return 0
         sent = 0
         for listing, reason in items[:cap]:
-            try:
-                await self._send(
-                    client,
-                    {"chat_id": self.chat_id, "text": format_listing(listing, reason)},
-                )
-                sent += 1
-            except Exception:
-                log.exception("telegram send failed")
+            sent += await self._broadcast(client, {"text": format_listing(listing, reason)})
         if len(items) > cap:
             log.info("%d further alert(s) suppressed this run", len(items) - cap)
         return sent
@@ -218,7 +244,7 @@ class TelegramNotifier:
     async def send_digest(
         self, items: list[tuple[Listing, str]], client: "httpx.AsyncClient", limit: int = 10
     ) -> int:
-        """Send one 'daily brief' digest with the top-ranked matches. Returns 1 if sent."""
+        """Send one 'daily brief' digest with the top-ranked matches to every chat."""
         if not items:
             return 0
         text = format_digest(items, limit)
@@ -226,15 +252,9 @@ class TelegramNotifier:
             log.warning("Telegram not configured — daily brief of %d would be sent", len(items))
             log.info("DIGEST: %s", text.replace("\n", " | "))
             return 0
-        try:
-            await self._send(
-                client,
-                {"chat_id": self.chat_id, "text": text, "disable_web_page_preview": True},
-            )
-            return 1
-        except Exception:
-            log.exception("telegram digest send failed")
-            return 0
+        return await self._broadcast(
+            client, {"text": text, "disable_web_page_preview": True}
+        )
 
     async def send_cards(
         self, items: list[tuple[Listing, str]], client: "httpx.AsyncClient", top_n: int = 5,
@@ -244,7 +264,7 @@ class TelegramNotifier:
 
         Each card is one listing, so a family member can react to exactly that property —
         tap a button, or reply to the card with text/voice (handled by the agentMode gate).
-        Returns the number of cards sent.
+        Returns the number of cards delivered across all chats.
         """
         ranked = sorted(items, key=lambda pair: pair[0].score or 0.0, reverse=True)[:top_n]
         if not ranked:
@@ -256,17 +276,12 @@ class TelegramNotifier:
         for listing, reason in ranked:
             # Telegram throttles bursts to one chat (~1 msg/s) — pace the cards.
             await asyncio.sleep(pause_s)
-            try:
-                await self._send(
-                    client,
-                    {
-                        "chat_id": self.chat_id,
-                        "text": format_listing(listing, reason),
-                        "disable_web_page_preview": True,
-                        "reply_markup": {"inline_keyboard": feedback_buttons(listing)},
-                    },
-                )
-                sent += 1
-            except Exception as exc:
-                log.warning("telegram card send failed: %s", exc)
+            sent += await self._broadcast(
+                client,
+                {
+                    "text": format_listing(listing, reason),
+                    "disable_web_page_preview": True,
+                    "reply_markup": {"inline_keyboard": feedback_buttons(listing)},
+                },
+            )
         return sent

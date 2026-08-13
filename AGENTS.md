@@ -161,7 +161,10 @@ Functions patterns.
   heterogeneous neighborhoods). Refresh with `scripts/refresh_deals.py`.
 - **Flood risk** is not yet wired (Phase 2.1 — ĢEOLatvija WFS point-in-polygon).
 - Telegram send is a no-op (logs alerts) until `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`
-  are set.
+  are set. `TELEGRAM_CHAT_ID` takes a **comma-separated list** — a bot can only write to a
+  chat that already exists, so every family member needs their own chat id listed (the
+  same ids agentMode holds in `TELEGRAM_ALLOWED_USERS`). A single group chat id works too.
+  With one id only that person sees the cards.
 
 ## Hypothesis
 

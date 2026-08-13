@@ -35,6 +35,49 @@ class NotifierTests(unittest.TestCase):
     def test_enabled_with_credentials(self):
         self.assertTrue(TelegramNotifier(token="t", chat_id="c").enabled)
 
+    def test_chat_id_list_reaches_every_family_member(self):
+        notifier = TelegramNotifier(token="t", chat_id="111, 222,333")
+        self.assertEqual(notifier.chat_ids, ["111", "222", "333"])
+        self.assertEqual(notifier.chat_id, "111")
+        self.assertTrue(notifier.enabled)
+
+    def test_single_chat_id_still_works(self):
+        self.assertEqual(TelegramNotifier(token="t", chat_id="111").chat_ids, ["111"])
+
+    def test_cards_are_sent_to_every_chat(self):
+        import asyncio
+
+        notifier = TelegramNotifier(token="t", chat_id="111,222")
+        payloads: list[dict] = []
+
+        async def _capture(client, payload):
+            payloads.append(payload)
+
+        notifier._send = _capture  # noqa: SLF001 — exercising the broadcast, not the HTTP call
+        sent = asyncio.run(
+            notifier.send_cards([(_listing(), "new")], client=None, top_n=1, pause_s=0)
+        )
+        self.assertEqual(sent, 2)
+        self.assertEqual([p["chat_id"] for p in payloads], ["111", "222"])
+
+    def test_one_failing_chat_does_not_block_the_others(self):
+        import asyncio
+
+        notifier = TelegramNotifier(token="t", chat_id="111,222")
+        delivered: list[str] = []
+
+        async def _flaky(client, payload):
+            if payload["chat_id"] == "111":
+                raise RuntimeError("blocked by user")
+            delivered.append(payload["chat_id"])
+
+        notifier._send = _flaky  # noqa: SLF001
+        sent = asyncio.run(
+            notifier.send_cards([(_listing(), "new")], client=None, top_n=1, pause_s=0)
+        )
+        self.assertEqual(sent, 1)
+        self.assertEqual(delivered, ["222"])
+
 
 class CardTests(unittest.TestCase):
     def test_feedback_buttons_encode_key(self):
