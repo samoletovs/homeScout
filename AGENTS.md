@@ -13,8 +13,8 @@ with an optional SWA dashboard. Grew out of agentMode's `property_search` skill.
 
 homeScout is a **professional property adviser**, not just a notifier — it reasons about each
 place (fair price vs the area, commute/airport, schools, pros/cons, what to check) and delivers
-a **daily brief** of ranked matches. Delivery reuses the family's existing **ilitut.ilitam bot
-(agentMode)** — same bot token (Key Vault) + family chat, no new bot. During transition,
+a **daily brief** of ranked matches. Delivery reuses the family's existing
+**agentMode bot** - same bot token (Key Vault) + family chat, no new bot. During transition,
 agentMode's simpler `property_search` skill keeps running; homeScout runs alongside as the
 advanced adviser and supersedes the old skill once trusted.
 
@@ -84,7 +84,7 @@ functions/
 ├── host.json
 └── requirements.txt
 infrastructure/main.bicep    # monitoring module + (TODO) Functions + Cosmos
-tests/                       # parsers/store/notify/scoring/geo/enrich/valuation/feedback/adviser (57 tests)
+tests/                       # parsers/store/notify/scoring/geo/enrich/valuation/feedback/adviser (66 tests)
 scripts/run_once.py          # local runner: real run + --preview on-demand brief (live fetch)
 scripts/refresh_amenities.py # refresh committed OSM amenities dataset
 scripts/refresh_deals.py     # refresh committed NĪTIS valuation index

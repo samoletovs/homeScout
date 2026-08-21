@@ -27,11 +27,9 @@ def get_client():
     if _client is None:
         from openai import AsyncAzureOpenAI
 
-        # A deployment name is an alias, not a model. Verified 2026-08-21: the
-        # deployment named `gpt-4o-mini` serves gpt-4.1-mini on the lab's
-        # rg-personal-agents account and genuine gpt-4o-mini on foundryLab. Log the
-        # endpoint host with the deployment (never the key) so the (resource,
-        # deployment) pair that actually answered is recoverable from logs.
+        # A deployment name is an alias, not necessarily a model name. Log the
+        # endpoint host with the deployment (never the key) so the resource and
+        # deployment pair that answered is recoverable from logs.
         host = urlparse(AZURE_OPENAI_ENDPOINT).hostname or "unknown-endpoint"
         log.info("Azure OpenAI: deployment=%s on %s", AZURE_OPENAI_DEPLOYMENT, host)
 

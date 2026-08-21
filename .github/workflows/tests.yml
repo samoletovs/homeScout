@@ -1,14 +1,14 @@
 name: Tests
 
-# homeScout files listings, enriches them and advises over Telegram; its tests cover the enrichment and advice logic that decides what Sam is told about a property.
+# homeScout files listings, enriches them and advises over Telegram; its tests cover the enrichment and advice logic shown to the user.
 #
 # The suite existed and no workflow ran it. A sweep on 2026-08-20 found 10 of
 # 25 projects in this state - test files present, never executed - so the repo
 # reported the assurance of having tests while providing none of it.
 #
 # No cron, so this adds nothing to the schedule ceiling in
-# nauroLabs-github/config/schedule-budget.json. Path-filtered because this repo
-# is private and its minutes come out of the monthly allowance.
+# nauroLabs-github/config/schedule-budget.json. Path-filtered to avoid unnecessary
+# workflow runs.
 
 on:
   push:

@@ -32,5 +32,12 @@ data/           # scraped listings / local cache
 playwright-report/
 test-results/
 
+# Build / IDE / OS
+build/
+dist/
+.vscode/
+.idea/
+Thumbs.db
+
 # Local-only personal-info pattern overrides
 scripts/.leak-patterns.local.txt
