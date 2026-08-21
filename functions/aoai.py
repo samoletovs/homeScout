@@ -1,7 +1,17 @@
 """Shared lazy Azure OpenAI async client for the adviser + translator."""
 from __future__ import annotations
 
-from config import AZURE_OPENAI_API_KEY, AZURE_OPENAI_API_VERSION, AZURE_OPENAI_ENDPOINT
+import logging
+from urllib.parse import urlparse
+
+from config import (
+    AZURE_OPENAI_API_KEY,
+    AZURE_OPENAI_API_VERSION,
+    AZURE_OPENAI_DEPLOYMENT,
+    AZURE_OPENAI_ENDPOINT,
+)
+
+log = logging.getLogger(__name__)
 
 _client = None
 
@@ -16,6 +26,14 @@ def get_client():
     global _client
     if _client is None:
         from openai import AsyncAzureOpenAI
+
+        # A deployment name is an alias, not a model. Verified 2026-08-21: the
+        # deployment named `gpt-4o-mini` serves gpt-4.1-mini on the lab's
+        # rg-personal-agents account and genuine gpt-4o-mini on foundryLab. Log the
+        # endpoint host with the deployment (never the key) so the (resource,
+        # deployment) pair that actually answered is recoverable from logs.
+        host = urlparse(AZURE_OPENAI_ENDPOINT).hostname or "unknown-endpoint"
+        log.info("Azure OpenAI: deployment=%s on %s", AZURE_OPENAI_DEPLOYMENT, host)
 
         _client = AsyncAzureOpenAI(
             azure_endpoint=AZURE_OPENAI_ENDPOINT,
