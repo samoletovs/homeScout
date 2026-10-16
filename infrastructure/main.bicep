@@ -9,6 +9,14 @@ param location string = 'northeurope'
 @description('Family communication language (data stays English)')
 param commLanguage string = 'ru'
 
+// The Flex plan and package container were auto-named when the app moved off Linux
+// Consumption (2026-10). A Flex app cannot change plans, so these must match the live names.
+@description('Flex Consumption plan name')
+param functionPlanName string = 'ASP-homescoutrg-384c'
+
+@description('Blob container holding the Flex deployment package')
+param deploymentContainerName string = 'app-package-homescoutfuncpk3dbg3673hg2-6732414'
+
 var suffix = uniqueString(resourceGroup().id)
 var tags = {
   project: projectName
@@ -80,18 +88,31 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   }
 }
 
-// ── Function App (Linux Consumption, Python 3.11). State lives in Cosmos, so the
-//    plan's ephemeral disk is fine — no persistence needed on the host. ──
-resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
-  name: '${projectName}-plan-${suffix}'
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+  parent: storage
+  name: 'default'
+}
+
+resource deploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: deploymentContainerName
+  properties: { publicAccess: 'None' }
+}
+
+var storageConnection = 'DefaultEndpointsProtocol=https;AccountName=${storage.name};AccountKey=${storage.listKeys().keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
+
+// ── Function App (Flex Consumption, Python 3.11). State lives in Cosmos, so the
+//    instance's ephemeral disk is fine — no persistence needed on the host. ──
+resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
+  name: functionPlanName
   location: location
   tags: tags
-  sku: { name: 'Y1', tier: 'Dynamic' }
+  sku: { name: 'FC1', tier: 'FlexConsumption' }
   kind: 'functionapp'
   properties: { reserved: true }
 }
 
-resource func 'Microsoft.Web/sites@2023-12-01' = {
+resource func 'Microsoft.Web/sites@2024-04-01' = {
   name: '${projectName}-func-${suffix}'
   location: location
   tags: tags
@@ -99,16 +120,27 @@ resource func 'Microsoft.Web/sites@2023-12-01' = {
   identity: { type: 'SystemAssigned' }
   properties: {
     serverFarmId: plan.id
-    reserved: true
     httpsOnly: true
+    functionAppConfig: {
+      deployment: {
+        storage: {
+          type: 'blobContainer'
+          value: '${storage.properties.primaryEndpoints.blob}${deploymentContainerName}'
+          authentication: {
+            type: 'StorageAccountConnectionString'
+            storageAccountConnectionStringName: 'DEPLOYMENT_STORAGE_CONNECTION_STRING'
+          }
+        }
+      }
+      scaleAndConcurrency: { maximumInstanceCount: 10, instanceMemoryMB: 2048 }
+      runtime: { name: 'python', version: '3.11' }
+    }
     siteConfig: {
-      linuxFxVersion: 'Python|3.11'
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       appSettings: [
-        { name: 'AzureWebJobsStorage', value: 'DefaultEndpointsProtocol=https;AccountName=${storage.name};AccountKey=${storage.listKeys().keys[0].value};EndpointSuffix=${environment().suffixes.storage}' }
-        { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
-        { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'python' }
+        { name: 'AzureWebJobsStorage', value: storageConnection }
+        { name: 'DEPLOYMENT_STORAGE_CONNECTION_STRING', value: storageConnection }
         { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: monitoring.outputs.connectionString }
         { name: 'COSMOS_ENDPOINT', value: cosmos.properties.documentEndpoint }
         { name: 'COSMOS_DATABASE', value: 'homescout' }
@@ -116,6 +148,7 @@ resource func 'Microsoft.Web/sites@2023-12-01' = {
       ]
     }
   }
+  dependsOn: [ deploymentContainer ]
 }
 
 // ── Cosmos data-plane RBAC: Function App identity → Built-in Data Contributor ──
