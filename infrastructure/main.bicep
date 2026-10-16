@@ -17,7 +17,11 @@ param functionPlanName string = 'ASP-homescoutrg-384c'
 @description('Blob container holding the Flex deployment package')
 param deploymentContainerName string = 'app-package-homescoutfuncpk3dbg3673hg2-6732414'
 
+@description('True when the Function App already exists. Its live app settings are then merged under the declared ones, so secrets set out of band survive a redeploy. Pass false only when creating the app.')
+param appExists bool = true
+
 var suffix = uniqueString(resourceGroup().id)
+var functionAppName = '${projectName}-func-${suffix}'
 var tags = {
   project: projectName
   managedBy: 'bicep'
@@ -113,7 +117,7 @@ resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
 }
 
 resource func 'Microsoft.Web/sites@2024-04-01' = {
-  name: '${projectName}-func-${suffix}'
+  name: functionAppName
   location: location
   tags: tags
   kind: 'functionapp,linux'
@@ -138,17 +142,30 @@ resource func 'Microsoft.Web/sites@2024-04-01' = {
     siteConfig: {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
-      appSettings: [
-        { name: 'AzureWebJobsStorage', value: storageConnection }
-        { name: 'DEPLOYMENT_STORAGE_CONNECTION_STRING', value: storageConnection }
-        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: monitoring.outputs.connectionString }
-        { name: 'COSMOS_ENDPOINT', value: cosmos.properties.documentEndpoint }
-        { name: 'COSMOS_DATABASE', value: 'homescout' }
-        { name: 'HOMESCOUT_LANG', value: commLanguage }
-      ]
+      appSettings: appSettings
     }
   }
   dependsOn: [ deploymentContainer ]
+}
+
+// siteConfig.appSettings replaces the whole set, so the live settings are read first and the
+// declared values win. Secrets (Telegram, Azure OpenAI, ...) are set out of band and survive.
+var declaredAppSettings = {
+  AzureWebJobsStorage: storageConnection
+  DEPLOYMENT_STORAGE_CONNECTION_STRING: storageConnection
+  APPLICATIONINSIGHTS_CONNECTION_STRING: monitoring.outputs.connectionString
+  COSMOS_ENDPOINT: cosmos.properties.documentEndpoint
+  COSMOS_DATABASE: 'homescout'
+  HOMESCOUT_LANG: commLanguage
+}
+var appSettings = map(items(union(liveSettings.outputs.settings, declaredAppSettings)), s => { name: s.key, value: s.value })
+
+module liveSettings 'modules/live-app-settings.bicep' = {
+  name: 'live-app-settings-${projectName}'
+  params: {
+    functionAppName: functionAppName
+    appExists: appExists
+  }
 }
 
 // ── Cosmos data-plane RBAC: Function App identity → Built-in Data Contributor ──

@@ -17,8 +17,15 @@ Pop-Location
 
 Write-Host "== Infrastructure (Bicep) ==" -ForegroundColor Cyan
 az group create -n $ResourceGroup -l $Location -o none
+# Bicep merges live app settings into its own, so secrets set out of band survive a
+# redeploy. Reading them needs the app to exist; tell the template whether it does.
+# A failed lookup must stop the deploy: treating it as "no app" would wipe the settings.
+$sitesJson = az resource list -g $ResourceGroup --resource-type Microsoft.Web/sites -o json
+if ($LASTEXITCODE -ne 0) { Write-Error "could not list Function Apps in $ResourceGroup - aborting"; exit 1 }
+$appExists = [bool]($sitesJson | ConvertFrom-Json | Where-Object { $_.name -match '^homescout-func-[a-z0-9]{13}$' })
 $outputs = az deployment group create -g $ResourceGroup -n homescout-deploy `
     --template-file "$PSScriptRoot/infrastructure/main.bicep" `
+    --parameters appExists=$($appExists.ToString().ToLower()) `
     --query "properties.outputs" -o json | ConvertFrom-Json
 $funcApp = $outputs.functionAppName.value
 Write-Host "Function App: $funcApp  |  Cosmos: $($outputs.cosmosEndpoint.value)" -ForegroundColor Green
