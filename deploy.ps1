@@ -2,7 +2,7 @@
 # publishes the function code. Run from the repo root: pwsh ./deploy.ps1
 #
 # State + learned family feedback live in Cosmos DB (durable), so the Function App runs on
-# the cheap Y1 Consumption plan. Secret app settings are set once, after the first deploy.
+# the Flex Consumption plan (FC1). Secret app settings are set once, after the first deploy.
 param(
     [string]$ResourceGroup = "homescout-rg",
     [string]$Location = "northeurope"
