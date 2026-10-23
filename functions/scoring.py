@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from models import Listing
@@ -57,6 +57,7 @@ class HardFilters:
     exclude_ground_floor: bool = False
     exclude_rented: bool = True
     require_ready: bool = True
+    weights: dict[str, float] = field(default_factory=lambda: dict(WEIGHTS))
 
     @classmethod
     def from_env(cls) -> "HardFilters":
@@ -71,6 +72,11 @@ class HardFilters:
         def _bool(key: str, default: bool) -> bool:
             return os.getenv(key, "1" if default else "0") != "0"
 
+        weights = {
+            name: float(os.getenv(f"HOMESCOUT_WEIGHT_{name.upper()}", str(weight)))
+            for name, weight in WEIGHTS.items()
+        }
+
         return cls(
             max_price=_num("HOMESCOUT_MAX_PRICE"),
             min_price=_num("HOMESCOUT_MIN_PRICE"),
@@ -81,6 +87,7 @@ class HardFilters:
             exclude_ground_floor=_bool("HOMESCOUT_EXCLUDE_GROUND", False),
             exclude_rented=_bool("HOMESCOUT_EXCLUDE_RENTED", True),
             require_ready=_bool("HOMESCOUT_REQUIRE_READY", True),
+            weights=weights,
         )
 
 
@@ -184,16 +191,28 @@ def _normalise(name: str, value: float) -> float:
     return 1.0 - x if name in COST_CRITERIA else x
 
 
-def score(features: dict[str, float]) -> tuple[float, dict[str, float]]:
+def score(
+    features: dict[str, float], weights: Optional[dict[str, float]] = None
+) -> tuple[float, dict[str, float]]:
     """Weighted-sum score in 0..1 plus each criterion's weighted contribution.
 
     Missing features score a neutral 0.5, so an incomplete listing is neither
-    unfairly punished nor rewarded.
+    unfairly punished nor rewarded. Partial weight overrides retain other defaults.
     """
-    total_weight = sum(WEIGHTS.values())
+    active_weights = dict(WEIGHTS)
+    if weights is not None:
+        unknown = weights.keys() - WEIGHTS.keys()
+        if unknown:
+            raise ValueError(f"Unknown scoring criteria: {', '.join(sorted(unknown))}")
+        active_weights.update(weights)
+    if any(weight < 0 for weight in active_weights.values()):
+        raise ValueError("Scoring weights must be non-negative")
+    total_weight = sum(active_weights.values())
+    if total_weight == 0:
+        raise ValueError("At least one scoring weight must be greater than zero")
     breakdown: dict[str, float] = {}
     acc = 0.0
-    for name, weight in WEIGHTS.items():
+    for name, weight in active_weights.items():
         raw = features.get(name)
         n = 0.5 if raw is None else _normalise(name, float(raw))
         contribution = weight * n
@@ -205,10 +224,12 @@ def score(features: dict[str, float]) -> tuple[float, dict[str, float]]:
 ENERGY_MAP = {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7}
 
 
-def score_listing(listing: Listing) -> tuple[float, dict[str, float]]:
+def score_listing(
+    listing: Listing, weights: Optional[dict[str, float]] = None
+) -> tuple[float, dict[str, float]]:
     """Score a listing from its enriched features, deriving energy from its class."""
     feats = dict(listing.features)
     if "energy" not in feats and listing.energy_class:
         feats["energy"] = ENERGY_MAP.get(listing.energy_class.strip().upper()[:1])
     feats["condition"] = _condition_score(listing)
-    return score(feats)
+    return score(feats, weights)

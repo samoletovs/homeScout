@@ -2,6 +2,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "functions"))
 
@@ -25,6 +26,16 @@ class ScoreTests(unittest.TestCase):
     def test_cost_criteria_are_inverted(self):
         # A shorter commute should beat a longer one, all else equal.
         self.assertGreater(score({"commute": 10})[0], score({"commute": 55})[0])
+
+    def test_environment_weights_change_score(self):
+        with patch.dict(os.environ, {"HOMESCOUT_WEIGHT_COMMUTE": "50"}, clear=True):
+            filters = HardFilters.from_env()
+
+        self.assertEqual(filters.weights["commute"], 50)
+        self.assertGreater(
+            score({"commute": 5}, filters.weights)[0],
+            score({"commute": 5})[0],
+        )
 
 
 class HardFilterTests(unittest.TestCase):
