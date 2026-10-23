@@ -47,6 +47,21 @@ python ../scripts/run_once.py
 The parser/scorer/store core is **stdlib-only** (tests need no network); `run_once`
 does a real fetch and seeds the dedup store on first run.
 
+## Listings API
+
+`GET /api/listings` returns `200 OK` with an `application/json` array of stored
+property listings (or `[]` when the store is empty), ordered by listing key.
+It uses the same store as the pipeline: Cosmos DB when `COSMOS_ENDPOINT` is set,
+otherwise SQLite at `HOMESCOUT_DB`.
+
+The endpoint requires an Azure Functions key, supplied via the `x-functions-key`
+header or `?code=` query parameter. Each record includes `key`, `source`, `url`,
+`district`, `price`, `area_m2`, `rooms`, `first_seen`, `last_seen`, `score`,
+`valuation`, `adviser`, `bucket`, `ppm2`, and `features` (a JSON object).
+Unavailable values are `null`; unsaved features are `{}`. Feedback and internal
+Cosmos DB metadata are not included. This reads already-ingested data; it does
+not fetch new listings.
+
 ## Structure
 
 - `functions/` — Azure Functions (Python v2), timer-triggered pipeline
