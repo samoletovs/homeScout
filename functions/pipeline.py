@@ -57,7 +57,7 @@ async def run_once(*, db_path: str | None = None, notify_results: bool = True) -
                 await enrich_all(fresh_listings, client, store, cap=ENRICH_CAP)
                 for listing in fresh_listings:
                     value_listing(listing)
-                    listing.score, _ = score_listing(listing)
+                    listing.score, _ = score_listing(listing, filters.weights)
                 fresh.sort(key=lambda pair: pair[0].score or 0.0, reverse=True)
                 if adviser_enabled():
                     taste = format_taste_for_adviser(store.taste_summary())
