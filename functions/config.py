@@ -56,6 +56,11 @@ OVERPASS_URLS = [
 ]
 ORS_MATRIX_URL = "https://api.openrouteservice.org/v2/matrix/driving-car"
 ORS_API_KEY = os.getenv("ORS_API_KEY", "")
+OSRM_ROUTE_URL = os.getenv("HOMESCOUT_OSRM_URL", "https://router.project-osrm.org")
+SCHOOL_RESULTS_DATASET_URL = (
+    "https://data.gov.lv/dati/api/3/action/package_show"
+    "?id=visparejas-pamatizglitibas-ce-rezultati"
+)
 
 SCHOOL_RADIUS_M = int(os.getenv("HOMESCOUT_SCHOOL_RADIUS_M", "2000"))
 ENRICH_CAP = int(os.getenv("HOMESCOUT_ENRICH_CAP", "15"))
