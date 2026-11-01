@@ -19,7 +19,8 @@ valued, ranked feed — a **decision aid, not just an alert bot**.
 ## What it does
 
 1. **Ingest** new listings from ss.lv RSS + city24 JSON API + developer sites (deduped).
-2. **Enrich** each with commute time, nearest school/kindergarten, flood flag.
+2. **Enrich** each with commute time (ORS/OSRM), nearby schools/kindergartens, school exam
+   results from Latvia's open-data catalog, and a flood flag.
 3. **Value** — compare €/m² against nearby registered deals (VZD NĪTIS) → over/under-priced.
 4. **Score** — hard filters + deterministic weighted-sum against family criteria.
 5. **Auction watch** — surface izsoles.ta.gov.lv real-estate auctions + due-diligence checklist.
@@ -59,7 +60,7 @@ does a real fetch and seeds the dedup store on first run.
   - `store.py` — SQLite dedup + price history + geocode cache
   - `models.py` — `Listing` / `Deal` / `ScoredListing`
 - `infrastructure/` — Bicep (monitoring + Functions + Cosmos)
-- `tests/` — 66 offline unit tests
+- `tests/` — 69 offline unit tests
 - `scripts/` — `run_once.py`; `refresh_amenities.py` + `refresh_deals.py` (dataset refresh)
 
 ## Data and privacy
@@ -72,9 +73,9 @@ repository. Runtime secrets go in
 ## Status
 
 **Active scaffold; phases 1-4 built.** ss.lv + city24 ingest, dedupe, Telegram alerts, enriched with
-commute / nearest school / kindergarten / €/m², each apartment flagged **under / fair /
+commute / nearest school / kindergarten / school exam results / €/m², each apartment flagged **under / fair /
 over-priced** vs registered sold-deals (VZD NĪTIS), and listings **ranked by a weighted ⭐
-score**. 66 passing tests. Off the default SWA-React golden path (Python Functions + Cosmos,
+score**. 69 passing tests. Off the default SWA-React golden path (Python Functions + Cosmos,
 like agentMode/mindMe) - deviation documented in [AGENTS.md](AGENTS.md). Next:
 auction watch (Phase 5) and dashboard (Phase 6).
 
