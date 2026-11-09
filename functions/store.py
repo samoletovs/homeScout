@@ -12,6 +12,11 @@ from models import Listing
 
 log = logging.getLogger("homescout.store")
 
+LISTING_FIELDS = (
+    "key", "source", "url", "district", "price", "area_m2", "rooms",
+    "first_seen", "last_seen", "score", "valuation", "adviser", "bucket", "ppm2", "features",
+)
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS listings (
   key TEXT PRIMARY KEY, source TEXT, url TEXT, district TEXT,
@@ -48,6 +53,18 @@ class Store:
 
     def is_empty(self) -> bool:
         return self.conn.execute("SELECT 1 FROM listings LIMIT 1").fetchone() is None
+
+    def get_listings(self) -> list[dict]:
+        """Return stored listings as JSON-friendly records, ordered by key."""
+        rows = self.conn.execute(
+            f"SELECT {', '.join(LISTING_FIELDS)} FROM listings ORDER BY key"
+        ).fetchall()
+        listings = []
+        for row in rows:
+            listing = dict(zip(LISTING_FIELDS, row))
+            listing["features"] = json.loads(listing["features"] or "{}")
+            listings.append(listing)
+        return listings
 
     def get_geo(self, query: str) -> Optional[tuple[float, float]]:
         row = self.conn.execute("SELECT lat, lon FROM geocache WHERE q=?", (query,)).fetchone()

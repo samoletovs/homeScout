@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from models import Listing
+from store import LISTING_FIELDS
 
 log = logging.getLogger("homescout.cosmos")
 
@@ -74,6 +75,19 @@ class CosmosStore:
             query="SELECT VALUE COUNT(1) FROM c", enable_cross_partition_query=True,
         ))
         return (rows[0] if rows else 0) == 0
+
+    def get_listings(self) -> list[dict]:
+        """Return stored listings with the same JSON-friendly fields as SQLite."""
+        rows = self._listings.query_items(
+            query=f"SELECT {', '.join('c.' + field for field in LISTING_FIELDS)} FROM c ORDER BY c.key",
+            enable_cross_partition_query=True,
+        )
+        listings = []
+        for row in rows:
+            listing = {field: row.get(field) for field in LISTING_FIELDS}
+            listing["features"] = listing["features"] or {}
+            listings.append(listing)
+        return listings
 
     def filter_new(self, listings: list[Listing]) -> list[tuple[Listing, str]]:
         """Persist all listings; return (listing, reason) for new or price-dropped ones."""
