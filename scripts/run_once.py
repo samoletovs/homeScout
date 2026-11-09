@@ -69,13 +69,13 @@ async def _preview(top: int, send: bool) -> None:
             ]
             for lst in listings:  # cheap pre-score to pick candidates worth enriching
                 value_listing(lst)
-                lst.score, _ = score_listing(lst)
+                lst.score, _ = score_listing(lst, filters.weights)
             listings.sort(key=lambda lst: lst.score or 0.0, reverse=True)
             shortlist = listings[:top]
             await enrich_all(shortlist, client, store, cap=ENRICH_CAP)
             for lst in shortlist:  # re-value + re-score now that commute/schools are known
                 value_listing(lst)
-                lst.score, _ = score_listing(lst)
+                lst.score, _ = score_listing(lst, filters.weights)
             shortlist.sort(key=lambda lst: lst.score or 0.0, reverse=True)
             if adviser_enabled():
                 taste = format_taste_for_adviser(store.taste_summary())
