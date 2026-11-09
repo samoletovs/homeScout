@@ -2,6 +2,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import Mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "functions"))
 
@@ -41,6 +42,28 @@ class StoreTests(unittest.TestCase):
         self.store.filter_new([_mk("a", 100000)])
         self.assertFalse(self.store.is_empty())
 
+    def test_get_listings_empty(self):
+        self.assertEqual(self.store.get_listings(), [])
+
+    def test_get_listings_includes_stored_fields_and_decodes_features(self):
+        listing = _mk("a", 100000)
+        listing.features = {"balcony": True}
+        self.store.filter_new([listing, _mk("b", 120000)])
+        self.store.save_evaluation(listing, "Rīga")
+        self.store.filter_new([_mk("a", 90000)])
+
+        rows = self.store.get_listings()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["key"], "ss.lv:a")
+        self.assertEqual(rows[0]["district"], "Rīga")
+        self.assertEqual(rows[0]["price"], 90000)
+        self.assertEqual(rows[0]["features"], {"balcony": True})
+        self.assertEqual(rows[0]["bucket"], "Rīga")
+        self.assertTrue(rows[0]["first_seen"])
+        self.assertTrue(rows[0]["last_seen"])
+        self.assertEqual(rows[1]["features"], {})
+        self.assertIsNone(rows[1]["score"])
+
     def test_save_evaluation_and_area_stats(self):
         listing = _mk("a", 200000)  # area_m2 50 → 4000 €/m²
         listing.score = 0.7
@@ -72,6 +95,31 @@ class CosmosHelperTests(unittest.TestCase):
         self.assertEqual(_geo_id("Mārupe, Latvija"), _geo_id("Mārupe, Latvija"))
         self.assertNotEqual(_geo_id("Rīga"), _geo_id("Jūrmala"))
         self.assertNotIn("/", _geo_id("a/b#c?d"))
+
+    def test_get_listings_empty(self):
+        from cosmos_store import CosmosStore
+        store = CosmosStore.__new__(CosmosStore)
+        store._listings = Mock()
+        store._listings.query_items.return_value = iter([])
+        self.assertEqual(store.get_listings(), [])
+
+    def test_get_listings_matches_sqlite_without_cosmos_metadata(self):
+        from cosmos_store import CosmosStore
+        sqlite = Store()
+        try:
+            sqlite.filter_new([_mk("a", 100000)])
+            expected = sqlite.get_listings()
+        finally:
+            sqlite.close()
+        doc = {k: v for k, v in expected[0].items()
+               if v is not None and k != "features"}
+        doc.update({"id": "ss.lv:a", "_etag": "internal", "prices": []})
+        store = CosmosStore.__new__(CosmosStore)
+        store._listings = Mock()
+        store._listings.query_items.return_value = iter([doc])
+
+        self.assertEqual(store.get_listings(), expected)
+        self.assertTrue(store._listings.query_items.call_args.kwargs["enable_cross_partition_query"])
 
 
 if __name__ == "__main__":
