@@ -72,7 +72,7 @@ functions/
 ├── pipeline.py       # ingest → dedupe → store(seen) → enrich → value → notify
 ├── sources.py        # async fetchers: ss.lv RSS + city24 (curl_cffi); izsoles/NĪTIS stubs
 ├── parsers.py        # pure payload → Listing parsers (unit-tested)
-├── enrich.py         # geocode (Nominatim) + nearest school/kindergarten (local OSM) + commute (ORS)
+├── enrich.py         # geocode + OSM amenities + school exam results (data.gov.lv) + commute (ORS/OSRM)
 ├── valuation.py      # €/m² vs area sold-deal medians (VZD NĪTIS) → under/fair/over
 ├── geo.py            # pure geo helpers: haversine, parsing, proximity score
 ├── store.py          # SQLite dedup / seen-state + price history + geocode cache
@@ -84,7 +84,7 @@ functions/
 ├── host.json
 └── requirements.txt
 infrastructure/main.bicep    # monitoring module + (TODO) Functions + Cosmos
-tests/                       # parsers/store/notify/scoring/geo/enrich/valuation/feedback/adviser (66 tests)
+tests/                       # parsers/store/notify/scoring/geo/enrich/valuation/feedback/adviser (69 tests)
 scripts/run_once.py          # local runner: real run + --preview on-demand brief (live fetch)
 scripts/refresh_amenities.py # refresh committed OSM amenities dataset
 scripts/refresh_deals.py     # refresh committed NĪTIS valuation index
@@ -98,7 +98,7 @@ scripts/refresh_deals.py     # refresh committed NĪTIS valuation index
 | city24.lv | JSON `https://api.city24.ee/lv_LV/search/realties?tsType=sale&unitType=Apartment` | richest — has lat/long + energy class |
 | VZD NĪTIS (sold deals) | data.gov.lv CKAN `package_show?id=nekustama-ipasuma-tirgus-datu-bazes-atvertie-dati` | CC BY 4.0, monthly; the valuation layer |
 | izsoles.ta.gov.lv | no API → scrape filtered HTML | court e-auctions; heavy buyer risk (see §Auction) |
-| Enrichment | OpenRouteService (commute); OSM schools/kindergartens (committed dataset, refresh script); flood: TODO | free tiers |
+| Enrichment | OpenRouteService (commute; OSRM fallback); OSM schools/kindergartens (committed dataset); school exam results (data.gov.lv); flood: TODO | free tiers |
 
 ## Key conventions
 
@@ -138,7 +138,7 @@ Functions patterns.
 ## Build plan (phases)
 
 1. ✅ **MVP (built)** — ss.lv RSS + city24 JSON → dedupe/store → Telegram alerts.
-2. ✅ **Enrichment (built)** — geocode + nearest school/kindergarten + commute (ORS) + €/m².
+2. ✅ **Enrichment (built)** — geocode + nearby amenities + school exam results + commute (ORS/OSRM) + €/m².
 3. ✅ **Valuation (built)** — €/m² vs VZD NĪTIS area medians → under/fair/over-priced.
 4. ✅ **Scoring (built)** — hard filters + weighted-sum → ranked, ⭐-scored shortlist.
 5. Auction watch — izsoles scrape + due-diligence checklist.
@@ -151,8 +151,8 @@ Functions patterns.
   state to Cosmos DB for durable cloud runs (Phase 6 / infra).
 - **city24 requires `curl_cffi`** (browser TLS impersonation); it degrades gracefully to
   ss.lv-only if that dep is missing or city24 rate-limits.
-- **Commute needs an `ORS_API_KEY`** (OpenRouteService free tier); without it, commute is
-  left unset (alerts still send).
+- **Commute prefers `ORS_API_KEY`** (OpenRouteService free tier) and falls back to the public
+  OSRM route API; commute is left unset if both fail (alerts still send).
 - **Schools/kindergartens** use a committed OSM snapshot (`functions/assets/lv_amenities.json`,
   greater-Rīga bbox); refresh with `scripts/refresh_amenities.py`. ss.lv listings are
   geocoded at **district level** (Nominatim), so distances are approximate.
