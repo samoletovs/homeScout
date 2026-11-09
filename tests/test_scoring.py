@@ -49,6 +49,16 @@ class ScoreTests(unittest.TestCase):
     def test_none_feature_is_treated_as_missing(self):
         self.assertEqual(score({"size": None})[0], score({})[0])
 
+    def test_environment_weights_change_score(self):
+        with patch.dict(os.environ, {"HOMESCOUT_WEIGHT_COMMUTE": "50"}, clear=True):
+            filters = HardFilters.from_env()
+
+        self.assertEqual(filters.weights["commute"], 50)
+        self.assertGreater(
+            score({"commute": 5}, filters.weights)[0],
+            score({"commute": 5})[0],
+        )
+
 
 class HardFilterTests(unittest.TestCase):
     def test_rejects_over_budget(self):

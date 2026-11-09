@@ -4,6 +4,7 @@ import logging
 import azure.functions as func
 
 from pipeline import run_once
+from store import open_store
 
 app = func.FunctionApp()
 
@@ -20,6 +21,20 @@ async def poll_listings(timer: func.TimerRequest) -> None:
         logging.warning("timer past due — running anyway")
     fresh = await run_once(notify_results=True)
     logging.info("homeScout: %d new/changed listing(s) this run", len(fresh))
+
+
+@app.route(route="listings", methods=["GET"], auth_level=func.AuthLevel.FUNCTION)
+def get_listings(req: func.HttpRequest) -> func.HttpResponse:
+    import json
+
+    store = open_store()
+    try:
+        return func.HttpResponse(
+            json.dumps(store.get_listings(), ensure_ascii=False),
+            mimetype="application/json", status_code=200,
+        )
+    finally:
+        store.close()
 
 
 # Family feedback intake — the agentMode Telegram gate POSTs 👍/👎 + comments here.
