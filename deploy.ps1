@@ -39,7 +39,7 @@ Write-Host ""
 Write-Host "== One-time secret app settings (not in Bicep) ==" -ForegroundColor Yellow
 Write-Host "az functionapp config appsettings set -g $ResourceGroup -n $funcApp --settings ``"
 Write-Host '  TELEGRAM_BOT_TOKEN=<token> TELEGRAM_CHAT_ID=<chat id[,chat id,...] - one per family member> `'
-Write-Host '  AZURE_OPENAI_ENDPOINT=<endpoint> AZURE_OPENAI_API_KEY=<key> AZURE_OPENAI_DEPLOYMENT=gpt-4.1-nano'
+Write-Host '  AZURE_OPENAI_ENDPOINT=<endpoint> AZURE_OPENAI_API_KEY=<key> AZURE_OPENAI_DEPLOYMENT=gpt-6-luna'
 Write-Host ""
 Write-Host "Then wire the agentMode gate to the feedback endpoint:" -ForegroundColor Yellow
 Write-Host "  <function key> = az functionapp keys list -g $ResourceGroup -n $funcApp --query functionKeys.default -o tsv"

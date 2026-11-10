@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from aoai import configured, get_client
-from config import AZURE_OPENAI_DEPLOYMENT, COMM_LANGUAGE, FAMILY_PROFILE
+from aoai import chat_kwargs, configured, get_client
+from config import COMM_LANGUAGE, FAMILY_PROFILE
 from models import Listing
 
 log = logging.getLogger("homescout.adviser")
@@ -80,10 +80,8 @@ async def advise(
         return None
     try:
         resp = await get_client().chat.completions.create(
-            model=AZURE_OPENAI_DEPLOYMENT,
             messages=build_messages(listing, stats, taste),
-            max_tokens=180,
-            temperature=0.4,
+            **chat_kwargs(max_tokens=180, temperature=0.4),
         )
         return (resp.choices[0].message.content or "").strip() or None
     except Exception:
