@@ -1,8 +1,9 @@
 """Enrichment dataset tests (offline; uses the committed OSM asset)."""
+import asyncio
 import os
 import sys
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "functions"))
 
@@ -144,6 +145,49 @@ class GeocodeTests(unittest.IsolatedAsyncioTestCase):
         sleep.assert_awaited_once_with(1.0)
         self.assertEqual(client.get.await_args.args[0], enrich.NOMINATIM_URL)
 
+    async def test_concurrent_requests_are_serialized_and_paced(self):
+        original_sleep = asyncio.sleep
+        active_requests = 0
+        max_active_requests = 0
+        cooldown_started = asyncio.Event()
+        release_cooldown = asyncio.Event()
+        sleep_calls = 0
+
+        async def get(*args, **kwargs):
+            nonlocal active_requests, max_active_requests
+            active_requests += 1
+            max_active_requests = max(max_active_requests, active_requests)
+            await original_sleep(0)
+            active_requests -= 1
+            return FakeResponse([{"lat": "56.9", "lon": "24.1"}])
+
+        async def rate_limit_sleep(seconds):
+            nonlocal sleep_calls
+            sleep_calls += 1
+            if sleep_calls == 1:
+                cooldown_started.set()
+                await release_cooldown.wait()
+
+        client = AsyncMock()
+        client.get.side_effect = get
+        store = MagicMock()
+        store.get_geo.return_value = None
+
+        with patch("enrich.asyncio.sleep", new_callable=AsyncMock) as sleep:
+            sleep.side_effect = rate_limit_sleep
+            first = asyncio.create_task(enrich.geocode("Mārupe", client, store))
+            await cooldown_started.wait()
+            second = asyncio.create_task(enrich.geocode("Rīga", client, store))
+            await original_sleep(0)
+            requests_during_cooldown = client.get.await_count
+            release_cooldown.set()
+            results = await asyncio.gather(first, second)
+
+        self.assertEqual(results, [(56.9, 24.1), (56.9, 24.1)])
+        self.assertEqual(requests_during_cooldown, 1)
+        self.assertEqual(max_active_requests, 1)
+        self.assertEqual(sleep.await_args_list, [call(1.0)] * 2)
+
     async def test_empty_search_result_returns_none(self):
         response = MagicMock()
         response.json.return_value = []
@@ -161,7 +205,9 @@ class GeocodeTests(unittest.IsolatedAsyncioTestCase):
         client.get.side_effect = RuntimeError("network unavailable")
         store = MagicMock()
         store.get_geo.return_value = None
-        self.assertIsNone(await enrich.geocode("Mārupe", client, store))
+        with patch("enrich.asyncio.sleep", new_callable=AsyncMock) as sleep:
+            self.assertIsNone(await enrich.geocode("Mārupe", client, store))
+        sleep.assert_awaited_once_with(1.0)
         store.put_geo.assert_not_called()
 
 
@@ -189,11 +235,57 @@ class CommuteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request["json"]["locations"], [[24.1, 56.9], [24.11, 56.95]])
         self.assertEqual(request["headers"]["Authorization"], "test-key")
 
+    async def test_concurrent_requests_are_serialized_and_paced(self):
+        original_sleep = asyncio.sleep
+        active_requests = 0
+        max_active_requests = 0
+        cooldown_started = asyncio.Event()
+        release_cooldown = asyncio.Event()
+        sleep_calls = 0
+
+        async def post(*args, **kwargs):
+            nonlocal active_requests, max_active_requests
+            active_requests += 1
+            max_active_requests = max(max_active_requests, active_requests)
+            await original_sleep(0)
+            active_requests -= 1
+            return FakeResponse({"durations": [[600]]})
+
+        async def rate_limit_sleep(seconds):
+            nonlocal sleep_calls
+            sleep_calls += 1
+            if sleep_calls == 1:
+                cooldown_started.set()
+                await release_cooldown.wait()
+
+        client = AsyncMock()
+        client.post.side_effect = post
+
+        with patch.object(enrich, "ORS_API_KEY", "test-key"), patch(
+            "enrich.asyncio.sleep", new_callable=AsyncMock
+        ) as sleep:
+            sleep.side_effect = rate_limit_sleep
+            first = asyncio.create_task(enrich.commute_minutes(56.9, 24.1, client))
+            await cooldown_started.wait()
+            second = asyncio.create_task(enrich.commute_minutes(56.8, 24.2, client))
+            await original_sleep(0)
+            requests_during_cooldown = client.post.await_count
+            release_cooldown.set()
+            results = await asyncio.gather(first, second)
+
+        self.assertEqual(results, [10.0, 10.0])
+        self.assertEqual(requests_during_cooldown, 1)
+        self.assertEqual(max_active_requests, 1)
+        self.assertEqual(sleep.await_args_list, [call(1.0)] * 2)
+
     async def test_request_failure_returns_none(self):
         client = AsyncMock()
         client.post.side_effect = RuntimeError("service unavailable")
-        with patch.object(enrich, "ORS_API_KEY", "test-key"):
+        with patch.object(enrich, "ORS_API_KEY", "test-key"), patch(
+            "enrich.asyncio.sleep", new_callable=AsyncMock
+        ) as sleep:
             self.assertIsNone(await enrich.commute_minutes(56.9, 24.1, client))
+        sleep.assert_awaited_once_with(1.0)
 
 
 class EnrichListingTests(unittest.IsolatedAsyncioTestCase):
