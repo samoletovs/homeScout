@@ -109,6 +109,36 @@ class AdditionalSourceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(ratings["rigasskola"], 82.5)
 
+    async def test_school_ratings_logs_catalog_and_resource_failures(self):
+        resource_url = "https://data.gov.lv/dati/school-results.csv"
+        dataset = FakeResponse({
+            "success": True,
+            "result": {"resources": [{"format": "CSV", "url": resource_url}]},
+        })
+        cases = [
+            ([RuntimeError("catalog unavailable")], enrich.SCHOOL_RESULTS_DATASET_URL, "catalog unavailable"),
+            ([dataset, RuntimeError("CSV unavailable")], resource_url, "CSV unavailable"),
+        ]
+        for responses, url, error in cases:
+            with self.subTest(url=url):
+                client = AsyncMock()
+                client.get.side_effect = responses
+                with self.assertLogs("homescout.enrich", level="ERROR") as logs:
+                    self.assertEqual(await enrich.school_ratings(client), {})
+                self.assertIn("school ratings fetch failed", logs.output[0])
+                self.assertIn(url, logs.output[0])
+                self.assertIn(error, logs.output[0])
+                self.assertIsNone(enrich._school_ratings_cache)
+
+    async def test_school_ratings_logs_invalid_catalog(self):
+        client = AsyncMock()
+        client.get.return_value = FakeResponse({"success": False})
+        with self.assertLogs("homescout.enrich", level="ERROR") as logs:
+            self.assertEqual(await enrich.school_ratings(client), {})
+        self.assertIn(enrich.SCHOOL_RESULTS_DATASET_URL, logs.output[0])
+        self.assertIn("school results dataset lookup failed", logs.output[0])
+        self.assertIsNone(enrich._school_ratings_cache)
+
 
 class AmenitiesCacheTests(unittest.TestCase):
     def test_missing_dataset_is_cached_as_empty(self):
@@ -161,7 +191,10 @@ class GeocodeTests(unittest.IsolatedAsyncioTestCase):
         client.get.side_effect = RuntimeError("network unavailable")
         store = MagicMock()
         store.get_geo.return_value = None
-        self.assertIsNone(await enrich.geocode("Mārupe", client, store))
+        with self.assertLogs("homescout.enrich", level="ERROR") as logs:
+            self.assertIsNone(await enrich.geocode("Mārupe", client, store))
+        self.assertIn("geocode failed: Mārupe", logs.output[0])
+        self.assertIn("network unavailable", logs.output[0])
         store.put_geo.assert_not_called()
 
 
