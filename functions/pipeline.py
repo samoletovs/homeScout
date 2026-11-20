@@ -49,12 +49,17 @@ async def run_once(*, db_path: str | None = None, notify_results: bool = True) -
             listings = _dedupe(await fetch_all(client))
             listings = [lst for lst in listings if passes_hard_filters(lst, filters)]
             fresh = store.filter_new(listings)
-            log.info("ingested=%d alertable=%d seeding=%s", len(listings), len(fresh), seeding)
+            log.info("ingested=%d candidates=%d seeding=%s", len(listings), len(fresh), seeding)
             if seeding:
                 log.info("first run — seeded %d listings, no alerts sent", len(fresh))
             elif fresh:
                 fresh_listings = [lst for lst, _ in fresh]
                 await enrich_all(fresh_listings, client, store, cap=ENRICH_CAP)
+                fresh = [
+                    (lst, reason) for lst, reason in fresh
+                    if passes_hard_filters(lst, filters)
+                ]
+                fresh_listings = [lst for lst, _ in fresh]
                 for listing in fresh_listings:
                     value_listing(listing)
                     listing.score, _ = score_listing(listing, filters.weights)

@@ -71,8 +71,11 @@ async def _preview(top: int, send: bool) -> None:
                 value_listing(lst)
                 lst.score, _ = score_listing(lst, filters.weights)
             listings.sort(key=lambda lst: lst.score or 0.0, reverse=True)
+            await enrich_all(listings, client, store, cap=0)
+            listings = [lst for lst in listings if passes_hard_filters(lst, filters)]
             shortlist = listings[:top]
             await enrich_all(shortlist, client, store, cap=ENRICH_CAP)
+            shortlist = [lst for lst in shortlist if passes_hard_filters(lst, filters)]
             for lst in shortlist:  # re-value + re-score now that commute/schools are known
                 value_listing(lst)
                 lst.score, _ = score_listing(lst, filters.weights)

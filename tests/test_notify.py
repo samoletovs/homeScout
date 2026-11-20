@@ -27,6 +27,11 @@ class FormatTests(unittest.TestCase):
     def test_price_drop_uses_distinct_tag(self):
         self.assertIn("📉", format_listing(_listing(), "price_drop"))
 
+    def test_flood_risk_is_shown(self):
+        listing = _listing()
+        listing.flood_risk = True
+        self.assertIn("⚠️", format_listing(listing))
+
 
 class NotifierTests(unittest.TestCase):
     def test_disabled_without_credentials(self):
