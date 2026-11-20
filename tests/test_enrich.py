@@ -1,4 +1,5 @@
 """Enrichment dataset tests (offline; uses the committed OSM asset)."""
+import json
 import os
 import sys
 import unittest
@@ -30,6 +31,8 @@ class FakeClient:
 
     async def get(self, url, **kwargs):
         self.urls.append(url)
+        if url == enrich.FLOOD_QUERY_URL:
+            return FakeResponse({"features": []})
         if url == enrich.SCHOOL_RESULTS_DATASET_URL:
             return FakeResponse({
                 "success": True,
@@ -78,6 +81,41 @@ class AdditionalSourceTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         enrich._school_ratings_cache = None
 
+    async def test_flood_risk_point_intersecting_zone_is_true(self):
+        response = FakeResponse({"features": [{"attributes": {"OBJECTID": 1}}]})
+        client = AsyncMock()
+        client.get.return_value = response
+
+        self.assertTrue(await enrich.flood_risk(56.95, 24.11, client))
+        request = client.get.await_args
+        self.assertEqual(request.args[0], enrich.FLOOD_QUERY_URL)
+        params = request.kwargs["params"]
+        self.assertEqual(params["geometryType"], "esriGeometryPoint")
+        self.assertEqual(params["spatialRel"], "esriSpatialRelIntersects")
+        self.assertEqual(
+            json.loads(params["geometry"]),
+            {"x": 24.11, "y": 56.95, "spatialReference": {"wkid": 4326}},
+        )
+
+    async def test_flood_risk_point_outside_zone_is_false(self):
+        client = AsyncMock()
+        client.get.return_value = FakeResponse({"features": []})
+
+        self.assertFalse(await enrich.flood_risk(56.95, 24.11, client))
+
+    async def test_flood_risk_failure_keeps_listing_processable_and_unset(self):
+        listing = Listing(id="flood-fail", source="city24", url="u", lat=56.95, lon=24.11)
+        client = AsyncMock()
+        client.get.side_effect = RuntimeError("service unavailable")
+        with patch("enrich.nearby", return_value=[]), patch(
+            "enrich.commute_minutes", new_callable=AsyncMock, return_value=None
+        ):
+            result = await enrich.enrich_listing(listing, client, MagicMock())
+
+        self.assertIs(result, listing)
+        self.assertIsNone(listing.flood_risk)
+        self.assertNotIn("flood_risk", listing.features)
+
     async def test_enrich_all_uses_osrm_and_school_results(self):
         client = FakeClient()
         listing = Listing(
@@ -92,6 +130,8 @@ class AdditionalSourceTests(unittest.IsolatedAsyncioTestCase):
             await enrich.enrich_all([listing], client, object())
 
         self.assertEqual(listing.commute_min, 12.5)
+        self.assertFalse(listing.flood_risk)
+        self.assertFalse(listing.features["flood_risk"])
         self.assertEqual(listing.features["school_rating"], 85.0)
         self.assertEqual(listing.features["schools"], 1.0)
         self.assertTrue(any("/route/v1/driving/" in url for url in client.urls))
@@ -207,6 +247,8 @@ class EnrichListingTests(unittest.IsolatedAsyncioTestCase):
         with patch("enrich.nearby", side_effect=lambda kind: {
             "school": schools, "kindergarten": kindergartens
         }[kind]), patch(
+            "enrich.flood_risk", new_callable=AsyncMock, return_value=True
+        ), patch(
             "enrich.commute_minutes", new_callable=AsyncMock, return_value=22.5
         ) as commute:
             result = await enrich.enrich_listing(listing, client, MagicMock())
@@ -215,6 +257,8 @@ class EnrichListingTests(unittest.IsolatedAsyncioTestCase):
         self.assertAlmostEqual(listing.nearest_school_km, nearest(56.9, 24.1, schools)[1], places=2)
         self.assertEqual(listing.nearest_kindergarten_km, round(nearest(56.9, 24.1, kindergartens)[1], 2))
         self.assertEqual(listing.commute_min, 22.5)
+        self.assertTrue(listing.flood_risk)
+        self.assertTrue(listing.features["flood_risk"])
         self.assertEqual(listing.features["commute"], 22.5)
         self.assertEqual(listing.features["price_per_m2"], 2000)
         self.assertEqual(listing.features["size"], 100)
@@ -234,10 +278,44 @@ class EnrichListingTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_enrich_all_respects_cap(self):
         listings = [Listing(id=str(i), source="x", url="u") for i in range(4)]
-        with patch("enrich.enrich_listing", new_callable=AsyncMock) as enrich_one:
+        with patch("enrich.enrich_listing", new_callable=AsyncMock) as enrich_one, patch(
+            "enrich.geocode", new_callable=AsyncMock, return_value=None
+        ):
             await enrich.enrich_all(listings, AsyncMock(), MagicMock(), cap=2)
         self.assertEqual(enrich_one.await_count, 2)
         self.assertEqual([call.args[0].id for call in enrich_one.await_args_list], ["0", "1"])
+
+    async def test_enrich_all_checks_flood_risk_beyond_full_enrichment_cap(self):
+        listings = [
+            Listing(id=str(i), source="x", url="u", lat=56.9, lon=24.1 + i)
+            for i in range(3)
+        ]
+        with patch("enrich.enrich_listing", new_callable=AsyncMock) as enrich_one, patch(
+            "enrich.flood_risk", new_callable=AsyncMock, side_effect=[False, True]
+        ) as check_flood:
+            await enrich.enrich_all(listings, AsyncMock(), MagicMock(), cap=1)
+
+        self.assertEqual(enrich_one.await_count, 1)
+        self.assertEqual(
+            [call.args[:2] for call in check_flood.await_args_list],
+            [(56.9, 25.1), (56.9, 26.1)],
+        )
+        self.assertFalse(listings[1].flood_risk)
+        self.assertTrue(listings[2].flood_risk)
+        self.assertTrue(listings[2].features["flood_risk"])
+
+    async def test_enrich_all_geocodes_for_flood_check_beyond_full_enrichment_cap(self):
+        listing = Listing(id="ss", source="ss.lv", url="u", district="Mārupe")
+        with patch(
+            "enrich.geocode", new_callable=AsyncMock, return_value=(56.95, 24.11)
+        ) as geocode, patch(
+            "enrich.flood_risk", new_callable=AsyncMock, return_value=False
+        ) as check_flood:
+            await enrich.enrich_all([listing], AsyncMock(), MagicMock(), cap=0)
+
+        geocode.assert_awaited_once_with("Mārupe, Latvija", unittest.mock.ANY, unittest.mock.ANY)
+        check_flood.assert_awaited_once_with(56.95, 24.11, unittest.mock.ANY)
+        self.assertFalse(listing.flood_risk)
 
 
 if __name__ == "__main__":

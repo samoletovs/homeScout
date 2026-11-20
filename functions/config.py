@@ -61,6 +61,10 @@ SCHOOL_RESULTS_DATASET_URL = (
     "https://data.gov.lv/dati/api/3/action/package_show"
     "?id=visparejas-pamatizglitibas-ce-rezultati"
 )
+FLOOD_QUERY_URL = (
+    "https://geodata.lvgmc.lv/server/rest/services/"
+    "Latvijas_plūdu_riska_un_plūdu_draudu_kartes_database2_MIL1/MapServer/111/query"
+)
 
 SCHOOL_RADIUS_M = int(os.getenv("HOMESCOUT_SCHOOL_RADIUS_M", "2000"))
 ENRICH_CAP = int(os.getenv("HOMESCOUT_ENRICH_CAP", "15"))

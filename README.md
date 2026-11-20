@@ -20,7 +20,10 @@ valued, ranked feed — a **decision aid, not just an alert bot**.
 
 1. **Ingest** new listings from ss.lv RSS + city24 JSON API + developer sites (deduped).
 2. **Enrich** each with commute time (ORS/OSRM), nearby schools/kindergartens, school exam
-   results from Latvia's open-data catalog, and a flood flag.
+   results from Latvia's open-data catalog, and flood-map intersection from LVĢMC's
+   [modeled flood-territory layer](https://geodata.lvgmc.lv/server/rest/services/Latvijas_pl%C5%ABdu_riska_un_pl%C5%ABdu_draudu_kartes_database2_MIL1/MapServer/111).
+   The map covers modeled scenarios, not parcel-level flood guarantees: a positive flag calls
+   for due diligence, and no intersection does not prove a property is flood-free.
 3. **Value** — compare €/m² against nearby registered deals (VZD NĪTIS) → over/under-priced.
 4. **Score** — hard filters + deterministic weighted-sum against family criteria.
 5. **Auction watch** — surface izsoles.ta.gov.lv real-estate auctions + due-diligence checklist.
@@ -68,7 +71,7 @@ not fetch new listings.
 - `functions/` — Azure Functions (Python v2), timer-triggered pipeline
   - `sources.py` — portal adapters (ss.lv, city24; izsoles/NĪTIS stubs)
   - `parsers.py` — pure payload → `Listing` parsers
-  - `enrich.py` / `geo.py` — geocode, nearest school/kindergarten, commute
+  - `enrich.py` / `geo.py` — geocode, nearest school/kindergarten, commute, flood map
   - `valuation.py` — €/m² vs area sold-deal medians (VZD NĪTIS)
   - `pipeline.py` — ingest → dedupe → store → enrich → value → notify
   - `scoring.py` — hard filters + weighted-sum (used from Phase 4)

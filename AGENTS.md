@@ -98,7 +98,7 @@ scripts/refresh_deals.py     # refresh committed NĪTIS valuation index
 | city24.lv | JSON `https://api.city24.ee/lv_LV/search/realties?tsType=sale&unitType=Apartment` | richest — has lat/long + energy class |
 | VZD NĪTIS (sold deals) | data.gov.lv CKAN `package_show?id=nekustama-ipasuma-tirgus-datu-bazes-atvertie-dati` | CC BY 4.0, monthly; the valuation layer |
 | izsoles.ta.gov.lv | no API → scrape filtered HTML | court e-auctions; heavy buyer risk (see §Auction) |
-| Enrichment | OpenRouteService (commute; OSRM fallback); OSM schools/kindergartens (committed dataset); school exam results (data.gov.lv); flood: TODO | free tiers |
+| Enrichment | OpenRouteService (commute; OSRM fallback); OSM schools/kindergartens (committed dataset); school exam results (data.gov.lv); LVĢMC modeled flood-territory feature layer | free tiers |
 
 ## Key conventions
 
@@ -159,7 +159,9 @@ Functions patterns.
 - **Valuation is apartment-only and area-median** (VZD NĪTIS, 2025–2026): precise for
   Mārupe/Jūrmala (small, uniform) but only a rough guide for Rīga (city-wide median vs
   heterogeneous neighborhoods). Refresh with `scripts/refresh_deals.py`.
-- **Flood risk** is not yet wired (Phase 2.1 — ĢEOLatvija WFS point-in-polygon).
+- **Flood risk** uses a point-intersection query against LVĢMC's modeled flood-territory
+  layer published via ĢEOLatvija; modeled scenarios are indicative, not a parcel-level
+  guarantee, and no intersection does not prove a property is flood-free.
 - Telegram send is a no-op (logs alerts) until `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`
   are set. `TELEGRAM_CHAT_ID` takes a **comma-separated list** — a bot can only write to a
   chat that already exists, so every family member needs their own chat id listed (the

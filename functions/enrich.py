@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 
 from config import (
     COMMUTE_DEST,
+    FLOOD_QUERY_URL,
     NOMINATIM_URL,
     ORS_API_KEY,
     ORS_MATRIX_URL,
@@ -84,6 +85,19 @@ async def geocode(query: str, client: "httpx.AsyncClient", store: "Store") -> Op
         return None
 
 
+async def _ensure_coordinates(listing: Listing, client: "httpx.AsyncClient", store: "Store") -> None:
+    if listing.lat is not None and listing.lon is not None:
+        return
+    parts: list[str] = []
+    for part in (listing.district, listing.description):
+        if part and part not in parts:
+            parts.append(part)
+    parts.append("Latvija")
+    coords = await geocode(", ".join(parts), client, store)
+    if coords:
+        listing.lat, listing.lon = coords
+
+
 async def commute_minutes(lat: float, lon: float, client: "httpx.AsyncClient") -> Optional[float]:
     if ORS_API_KEY:
         try:
@@ -121,6 +135,47 @@ async def commute_minutes(lat: float, lon: float, client: "httpx.AsyncClient") -
     except Exception:
         log.exception("OSRM commute failed")
         return None
+
+
+async def flood_risk(lat: float, lon: float, client: "httpx.AsyncClient") -> Optional[bool]:
+    """Check whether a point intersects LVĢMC's modeled flood-territory layer."""
+    try:
+        resp = await client.get(
+            FLOOD_QUERY_URL,
+            params={
+                "geometry": json.dumps({
+                    "x": lon,
+                    "y": lat,
+                    "spatialReference": {"wkid": 4326},
+                }, separators=(",", ":")),
+                "geometryType": "esriGeometryPoint",
+                "spatialRel": "esriSpatialRelIntersects",
+                "inSR": 4326,
+                "outFields": "OBJECTID",
+                "returnGeometry": "false",
+                "f": "json",
+            },
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        features = result.get("features") if isinstance(result, dict) else None
+        if not isinstance(features, list):
+            raise ValueError("flood map query returned an invalid response")
+        return bool(features)
+    except Exception:
+        log.exception("flood risk lookup failed")
+        return None
+
+
+async def _set_flood_risk(listing: Listing, client: "httpx.AsyncClient") -> None:
+    if listing.lat is None or listing.lon is None or listing.flood_risk is not None:
+        return
+    risk = await flood_risk(listing.lat, listing.lon, client)
+    listing.flood_risk = risk
+    if risk is None:
+        listing.features.pop("flood_risk", None)
+    else:
+        listing.features["flood_risk"] = risk
 
 
 def _school_key(name: str) -> str:
@@ -215,15 +270,7 @@ async def school_ratings(client: "httpx.AsyncClient") -> dict[str, float]:
 async def enrich_listing(listing: Listing, client: "httpx.AsyncClient", store: "Store") -> Listing:
     """Attach coordinates, nearest school/kindergarten, and commute time to a listing."""
     # city24 carries coordinates; ss.lv needs geocoding (district + area hint).
-    if listing.lat is None or listing.lon is None:
-        parts: list[str] = []
-        for part in (listing.district, listing.description):
-            if part and part not in parts:
-                parts.append(part)
-        parts.append("Latvija")
-        coords = await geocode(", ".join(parts), client, store)
-        if coords:
-            listing.lat, listing.lon = coords
+    await _ensure_coordinates(listing, client, store)
     if listing.lat is None or listing.lon is None:
         return listing
 
@@ -246,6 +293,8 @@ async def enrich_listing(listing: Listing, client: "httpx.AsyncClient", store: "
         if rating is not None:
             listing.features["school_rating"] = rating
 
+    await _set_flood_risk(listing, client)
+
     minutes = await commute_minutes(listing.lat, listing.lon, client)
     if minutes is not None:
         listing.commute_min = minutes
@@ -261,6 +310,10 @@ async def enrich_listing(listing: Listing, client: "httpx.AsyncClient", store: "
 async def enrich_all(
     listings: list[Listing], client: "httpx.AsyncClient", store: "Store", cap: int = 15
 ) -> None:
-    """Enrich up to `cap` listings in place (sequential, to respect rate limits)."""
-    for listing in listings[:cap]:
-        await enrich_listing(listing, client, store)
+    """Fully enrich up to `cap`; check flood risk on every listing with coordinates."""
+    for index, listing in enumerate(listings):
+        if index < cap:
+            await enrich_listing(listing, client, store)
+        else:
+            await _ensure_coordinates(listing, client, store)
+            await _set_flood_risk(listing, client)

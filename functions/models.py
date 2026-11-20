@@ -27,7 +27,7 @@ class Listing:
     property_type: str = "apartment"
     # --- enrichment (filled by the pipeline) ---
     commute_min: Optional[float] = None
-    flood_risk: bool = False
+    flood_risk: Optional[bool] = None
     nearest_school_km: Optional[float] = None
     nearest_kindergarten_km: Optional[float] = None
     valuation: Optional[str] = None
