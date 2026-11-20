@@ -185,8 +185,9 @@ async def school_ratings(client: "httpx.AsyncClient") -> dict[str, float]:
     global _school_ratings_cache
     if _school_ratings_cache is not None:
         return _school_ratings_cache
+    url = SCHOOL_RESULTS_DATASET_URL
     try:
-        resp = await client.get(SCHOOL_RESULTS_DATASET_URL)
+        resp = await client.get(url)
         resp.raise_for_status()
         dataset = resp.json()
         if not dataset.get("success"):
@@ -203,12 +204,13 @@ async def school_ratings(client: "httpx.AsyncClient") -> dict[str, float]:
         if not resources:
             raise ValueError("school results dataset has no CSV resource")
         resource = max(resources, key=lambda item: item.get("last_modified") or item.get("created") or "")
-        data_resp = await client.get(resource["url"])
+        url = resource["url"]
+        data_resp = await client.get(url)
         data_resp.raise_for_status()
         _school_ratings_cache = _parse_school_ratings(data_resp.text)
         return _school_ratings_cache
     except Exception:
-        log.exception("school ratings fetch failed")
+        log.exception("school ratings fetch failed: %s", url)
         return {}
 
 
