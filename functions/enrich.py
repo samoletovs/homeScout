@@ -41,6 +41,10 @@ log = logging.getLogger("homescout.enrich")
 _AMENITIES_PATH = os.path.join(os.path.dirname(__file__), "assets", "lv_amenities.json")
 _amenities_cache: Optional[list[dict]] = None
 _school_ratings_cache: Optional[dict[str, float]] = None
+_GEOCODE_RATE_LIMIT_SECONDS = 1.0
+_COMMUTE_RATE_LIMIT_SECONDS = 1.0
+_GEOCODE_SEMAPHORE = asyncio.Semaphore(1)
+_COMMUTE_SEMAPHORE = asyncio.Semaphore(1)
 
 
 def _amenities() -> list[dict]:
@@ -65,62 +69,74 @@ async def geocode(query: str, client: "httpx.AsyncClient", store: "Store") -> Op
     cached = store.get_geo(query)
     if cached is not None:
         return cached
-    try:
-        resp = await client.get(
-            NOMINATIM_URL,
-            params={"q": query, "format": "json", "limit": 1, "countrycodes": "lv"},
-            headers={"User-Agent": USER_AGENT},
-        )
-        resp.raise_for_status()
-        results = resp.json()
-        await asyncio.sleep(1.0)  # Nominatim usage policy: <= 1 req/sec
-        if not results:
+    async with _GEOCODE_SEMAPHORE:
+        requested = False
+        try:
+            cached = store.get_geo(query)
+            if cached is not None:
+                return cached
+            requested = True
+            resp = await client.get(
+                NOMINATIM_URL,
+                params={"q": query, "format": "json", "limit": 1, "countrycodes": "lv"},
+                headers={"User-Agent": USER_AGENT},
+            )
+            resp.raise_for_status()
+            results = resp.json()
+            if not results:
+                return None
+            lat, lon = float(results[0]["lat"]), float(results[0]["lon"])
+            store.put_geo(query, lat, lon)
+            return lat, lon
+        except Exception:
+            log.exception("geocode failed: %s", query)
             return None
-        lat, lon = float(results[0]["lat"]), float(results[0]["lon"])
-        store.put_geo(query, lat, lon)
-        return lat, lon
-    except Exception:
-        log.exception("geocode failed: %s", query)
-        return None
+        finally:
+            if requested:
+                await asyncio.sleep(_GEOCODE_RATE_LIMIT_SECONDS)
 
 
 async def commute_minutes(lat: float, lon: float, client: "httpx.AsyncClient") -> Optional[float]:
-    if ORS_API_KEY:
+    async with _COMMUTE_SEMAPHORE:
         try:
-            resp = await client.post(
-                ORS_MATRIX_URL,
-                headers={"Authorization": ORS_API_KEY, "Content-Type": "application/json"},
-                json={
-                    "locations": [[lon, lat], [COMMUTE_DEST[1], COMMUTE_DEST[0]]],
-                    "sources": [0],
-                    "destinations": [1],
-                    "metrics": ["duration"],
-                },
-            )
-            resp.raise_for_status()
-            minutes = parse_ors_matrix_minutes(resp.json())
-            if minutes is not None:
-                return minutes
-        except Exception:
-            log.exception("ORS commute failed")
+            if ORS_API_KEY:
+                try:
+                    resp = await client.post(
+                        ORS_MATRIX_URL,
+                        headers={"Authorization": ORS_API_KEY, "Content-Type": "application/json"},
+                        json={
+                            "locations": [[lon, lat], [COMMUTE_DEST[1], COMMUTE_DEST[0]]],
+                            "sources": [0],
+                            "destinations": [1],
+                            "metrics": ["duration"],
+                        },
+                    )
+                    resp.raise_for_status()
+                    minutes = parse_ors_matrix_minutes(resp.json())
+                    if minutes is not None:
+                        return minutes
+                except Exception:
+                    log.exception("ORS commute failed")
 
-    try:
-        resp = await client.get(
-            f"{OSRM_ROUTE_URL.rstrip('/')}/route/v1/driving/"
-            f"{lon},{lat};{COMMUTE_DEST[1]},{COMMUTE_DEST[0]}",
-            params={"overview": "false"},
-        )
-        resp.raise_for_status()
-        routes = resp.json().get("routes")
-        if not routes or routes[0].get("duration") is None:
-            return None
-        seconds = float(routes[0]["duration"])
-        if not math.isfinite(seconds) or seconds < 0:
-            return None
-        return round(seconds / 60.0, 1)
-    except Exception:
-        log.exception("OSRM commute failed")
-        return None
+            try:
+                resp = await client.get(
+                    f"{OSRM_ROUTE_URL.rstrip('/')}/route/v1/driving/"
+                    f"{lon},{lat};{COMMUTE_DEST[1]},{COMMUTE_DEST[0]}",
+                    params={"overview": "false"},
+                )
+                resp.raise_for_status()
+                routes = resp.json().get("routes")
+                if not routes or routes[0].get("duration") is None:
+                    return None
+                seconds = float(routes[0]["duration"])
+                if not math.isfinite(seconds) or seconds < 0:
+                    return None
+                return round(seconds / 60.0, 1)
+            except Exception:
+                log.exception("OSRM commute failed")
+                return None
+        finally:
+            await asyncio.sleep(_COMMUTE_RATE_LIMIT_SECONDS)
 
 
 def _school_key(name: str) -> str:
